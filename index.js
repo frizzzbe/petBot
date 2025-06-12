@@ -15,6 +15,7 @@ const commands = [
 
 const userBukashki = {};
 const feedTimers = {};
+const lastFeedTime = {}; // Хранит время последнего кормления для каждого пользователя
 
 // Функция для форматирования информации о букашке
 function formatBukashkaInfo(bukashka, feedChange = 0) {
@@ -171,6 +172,34 @@ function calculateAge(creationDate) {
 	}
 }
 
+// Функция для определения результата кормления
+function getFeedResult(bukashkaName) {
+	const random = Math.random() * 100; // Генерируем число от 0 до 100
+
+	if (random < 60) {
+		return {
+			type: "водичку",
+			amount: 5,
+			happiness: 0,
+			message: `${bukashkaName} выпила водичку 🍽️\nСытость увеличилась на 5 🌱`,
+		};
+	} else if (random < 90) {
+		return {
+			type: "листик",
+			amount: 10,
+			happiness: 5,
+			message: `${bukashkaName} съела листик 🍽️\nСытость увеличилась на 10 🌱\nСчастье увеличилось на 5 😊`,
+		};
+	} else {
+		return {
+			type: "яблочко",
+			amount: 20,
+			happiness: 15,
+			message: `🎉 *Невероятно\\!* 🎉\n\nВаша ${bukashkaName} нашла и съела яблочко\\! 🍎\nСытость увеличилась на 20 🌱\nСчастье увеличилось на 15 😊\n\nВаша букашка очень счастлива\\! 💖`,
+		};
+	}
+}
+
 //Устанавливаем меню команд
 bot.setMyCommands(commands);
 
@@ -199,6 +228,10 @@ bot.on("text", async (msg) => {
 ⭐️ Покормить - Покормить вашу букашку
 ⭐️ Моя букашка - Посмотреть информацию о вашем питомце
 ⭐️ Картинка - Отправить фото для вашей букашки
+
+Важно знать:
+• Если сытость упадет до 0, букашка умрет от голода
+• Команда "раздавить букашку" позволит вам избавиться от питомца
 
 Управление меню:
 ❌ Закрыть меню - Скрыть клавиатуру
@@ -245,10 +278,35 @@ bot.on("text", async (msg) => {
 		} else if (msg.text == "⭐️ Покормить") {
 			const userId = msg.from.id;
 			if (userBukashki[userId]) {
-				const bukashka = userBukashki[userId];
-				bukashka.feed = Math.min(100, bukashka.feed + 1); // Увеличиваем сытость, но не выше 100
+				// Проверяем, прошло ли 3 секунды с последнего кормления
+				const now = Date.now();
+				const lastFeed = lastFeedTime[userId] || 0;
 
-				await sendBukashkaInfo(msg.chat.id, bukashka, 1);
+				if (now - lastFeed < 3000) {
+					const remainingTime = Math.ceil((3000 - (now - lastFeed)) / 1000);
+					await bot.sendMessage(
+						msg.chat.id,
+						`Подождите еще ${remainingTime} сек\\. перед следующим кормлением\\! ⏳`,
+						{ parse_mode: "MarkdownV2" }
+					);
+					return;
+				}
+
+				const bukashka = userBukashki[userId];
+				const feedResult = getFeedResult(bukashka.name);
+
+				// Обновляем время последнего кормления
+				lastFeedTime[userId] = now;
+
+				// Увеличиваем сытость и счастье в зависимости от результата
+				bukashka.feed = Math.min(100, bukashka.feed + feedResult.amount);
+				bukashka.happy = Math.min(100, bukashka.happy + feedResult.happiness);
+
+				await bot.sendMessage(msg.chat.id, feedResult.message, {
+					parse_mode: "MarkdownV2",
+				});
+
+				await sendBukashkaInfo(msg.chat.id, bukashka, feedResult.amount);
 			} else {
 				await bot.sendMessage(
 					msg.chat.id,
