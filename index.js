@@ -14,6 +14,7 @@ const commands = [
 ];
 
 const userBukashki = {};
+const feedTimers = {};
 
 // Функция для форматирования информации о букашке
 function formatBukashkaInfo(bukashka, feedChange = 0) {
@@ -78,6 +79,98 @@ async function sendBukashkaInfo(chatId, bukashka, feedChange = 0) {
 	}
 }
 
+// Функция для запуска таймера уменьшения сытости
+function startFeedTimer(userId, chatId) {
+	// Останавливаем предыдущий таймер, если он существует
+	if (feedTimers[userId]) {
+		clearInterval(feedTimers[userId]);
+	}
+
+	// Запускаем новый таймер
+	feedTimers[userId] = setInterval(async () => {
+		if (userBukashki[userId]) {
+			const bukashka = userBukashki[userId];
+			bukashka.feed = Math.max(0, bukashka.feed - 1); // Уменьшаем сытость, но не ниже 0
+
+			// Если букашка голодная, отправляем уведомление
+			if (bukashka.feed < 10) {
+				// Отправляем уведомление только при определенных уровнях сытости
+				if ([10, 5, 1].includes(bukashka.feed)) {
+					const hungerMessage = `
+⚠️ *Внимание\\!* Ваша букашка ${bukashka.name} голодна\\! 🐛
+
+Текущий уровень сытости: ${bukashka.feed} 🌱
+Пожалуйста, покормите вашего питомца, используя команду "⭐️ Покормить"\\!
+`;
+
+					await bot.sendMessage(chatId, hungerMessage, {
+						parse_mode: "MarkdownV2",
+					});
+				}
+			}
+
+			// Проверка на смерть от голода
+			if (bukashka.feed === 0) {
+				await killBukashka(userId, chatId, "голод");
+			}
+		}
+	}, 3000); // 3 секунды
+}
+
+// Функция для остановки таймера
+function stopFeedTimer(userId) {
+	if (feedTimers[userId]) {
+		clearInterval(feedTimers[userId]);
+		delete feedTimers[userId];
+	}
+}
+
+// Функция для убийства букашки
+async function killBukashka(userId, chatId, reason) {
+	if (userBukashki[userId]) {
+		const bukashka = userBukashki[userId];
+		const deathMessage = `
+💀 *Ваша букашка ${bukashka.name} умерла\\!* 
+
+Причина смерти: ${reason}
+Возраст на момент смерти: ${calculateAge(bukashka.creationDate)}
+
+Нажмите "⭐️ Взять букашку", чтобы завести нового питомца\\. 🐛
+`;
+
+		// Останавливаем таймер
+		stopFeedTimer(userId);
+
+		// Удаляем букашку
+		delete userBukashki[userId];
+
+		await bot.sendMessage(chatId, deathMessage, {
+			parse_mode: "MarkdownV2",
+		});
+	}
+}
+
+// Функция для расчета возраста букашки
+function calculateAge(creationDate) {
+	const now = new Date();
+	const creation = new Date(creationDate);
+	const ageDiff = now - creation;
+
+	const minutes = Math.floor(ageDiff / (1000 * 60));
+	const hours = Math.floor(minutes / 60);
+	const days = Math.floor(hours / 24);
+
+	if (days > 0) {
+		const remainingHours = hours % 24;
+		return `${days} дн\\. ${remainingHours} ч\\.`;
+	} else if (hours > 0) {
+		const remainingMinutes = minutes % 60;
+		return `${hours} ч\\. ${remainingMinutes} мин\\.`;
+	} else {
+		return `${minutes} мин\\.`;
+	}
+}
+
 //Устанавливаем меню команд
 bot.setMyCommands(commands);
 
@@ -139,6 +232,9 @@ bot.on("text", async (msg) => {
 
 					const bukashka = userBukashki[userId];
 					await sendBukashkaInfo(msg.chat.id, bukashka);
+
+					// Запускаем таймер уменьшения сытости
+					startFeedTimer(userId, msg.chat.id);
 				});
 			} else {
 				await bot.sendMessage(
@@ -150,7 +246,7 @@ bot.on("text", async (msg) => {
 			const userId = msg.from.id;
 			if (userBukashki[userId]) {
 				const bukashka = userBukashki[userId];
-				bukashka.feed += 1;
+				bukashka.feed = Math.min(100, bukashka.feed + 1); // Увеличиваем сытость, но не выше 100
 
 				await sendBukashkaInfo(msg.chat.id, bukashka, 1);
 			} else {
@@ -177,6 +273,17 @@ bot.on("text", async (msg) => {
 				msg.chat.id,
 				"Пожалуйста, отправьте изображение, которое вы хотите отправить обратно."
 			);
+		} else if (msg.text == "раздавить букашку") {
+			const userId = msg.from.id;
+			if (userBukashki[userId]) {
+				await killBukashka(userId, msg.chat.id, "раздавлена хозяином");
+			} else {
+				await bot.sendMessage(
+					msg.chat.id,
+					"У вас нет букашки, которую можно раздавить\\! 🐛",
+					{ parse_mode: "MarkdownV2" }
+				);
+			}
 		} else {
 			//Отправляем пользователю сообщение
 			const msgWait = await bot.sendMessage(
