@@ -639,7 +639,7 @@ bot.on("text", async (msg) => {
 			} else {
 				await bot.sendMessage(
 					msg.chat.id,
-					"У вас нет букашки, которую можно раздавить! 🐛",
+					formatMessage("У вас нет букашки, которую можно раздавить! 🐛"),
 					{ parse_mode: "MarkdownV2" }
 				);
 			}
@@ -674,7 +674,7 @@ bot.on("photo", async (msg) => {
 			await sendBukashkaInfo(msg.chat.id, userBukashki[userId]);
 		} else {
 			await bot.sendPhoto(msg.chat.id, photo.file_id, {
-				caption: `Привет, ${bukashka.name}!`,
+				caption: formatMessage(`Привет, ${bukashka.name}!`),
 				parse_mode: "MarkdownV2",
 			});
 		}
