@@ -131,17 +131,25 @@ const isInAdventure = (userId) => {
 
 // Функция для получения оставшегося времени приключения
 const getAdventureTimeLeft = (userId) => {
-	if (!adventureStartTime[userId]) return 0;
+	const startTime = adventureStartTime[userId];
+	if (!startTime) return 0;
+
 	const now = Date.now();
-	const timeLeft = 6 * 60 * 60 * 1000 - (now - adventureStartTime[userId]);
-	return Math.max(0, timeLeft);
+	const elapsed = Math.floor((now - startTime) / 1000);
+	return Math.max(0, 30 - elapsed);
 };
 
 // Функция для форматирования оставшегося времени
 const formatTimeLeft = (timeLeft) => {
-	const hours = Math.floor(timeLeft / (60 * 60 * 1000));
-	const minutes = Math.floor((timeLeft % (60 * 60 * 1000)) / (60 * 1000));
-	return `${hours} ч. ${minutes} мин.`;
+	const hours = Math.floor(timeLeft / (60 * 60));
+	const minutes = Math.floor((timeLeft % (60 * 60)) / 60);
+	const seconds = Math.floor(timeLeft % 60);
+
+	if (hours > 0) {
+		return `${hours} ч. ${minutes} мин.`;
+	} else {
+		return `${minutes} мин. ${seconds} сек.`;
+	}
 };
 
 // Функция для экранирования специальных символов в тексте
@@ -173,7 +181,7 @@ const completeAdventure = async (chatId) => {
 	if (!bukashka || !bukashka.isAdventuring) return;
 
 	// Выбираем случайное приключение
-	const adventure = adventures[Math.floor(Math.random() * adventures.length)];
+	const adventure = bukashka.adventureResult;
 
 	// Применяем эффекты приключения
 	bukashka.feed = Math.max(0, Math.min(100, bukashka.feed + adventure.feed));
@@ -205,9 +213,6 @@ ${adventure.happiness > 0 ? '+' : ''}${adventure.happiness} к счастью �
 		await killBukashka(bukashka.userId, chatId, "последствий приключения");
 		return;
 	}
-
-	// Показываем обновленную информацию о букашке
-	await sendBukashkaInfo(chatId, bukashka);
 };
 
 // Функция для форматирования информации о букашке
@@ -426,7 +431,6 @@ bot.setMyCommands(commands);
 bot.on("text", async (msg) => {
 	try {
 		const normalizedText = normalizeCommand(msg.text);
-		console.log('Normalized text:', normalizedText); // Добавляем для отладки
 
 		if (msg.text.startsWith("/start")) {
 			await bot.sendMessage(msg.chat.id, `Вы запустили бота! 👋🏻`, {
@@ -551,7 +555,7 @@ bot.on("text", async (msg) => {
 						return;
 					}
 
-					await sendBukashkaInfo(msg.chat.id, bukashka, feedResult.amount, feedResult.happiness);
+					// await sendBukashkaInfo(msg.chat.id, bukashka, feedResult.amount, feedResult.happiness);
 				} catch (error) {
 					await bot.sendMessage(msg.chat.id, "Произошла ошибка при кормлении букашки. Попробуйте еще раз.");
 				}
@@ -695,26 +699,29 @@ bot.on('callback_query', async (query) => {
 });
 
 // Функция для начала приключения
-function startAdventure(chatId) {
+const startAdventure = async (chatId) => {
 	const bukashka = userBukashki[chatId];
 	if (!bukashka) return;
 
 	const adventure = adventures[Math.floor(Math.random() * adventures.length)];
 	bukashka.isAdventuring = true;
-	bukashka.adventureStartTime = Date.now();
 	bukashka.adventureResult = adventure;
+	adventureStartTime[chatId] = Date.now();
+
 	adventureTimers[chatId] = setTimeout(() => completeAdventure(chatId), 30 * 1000);
 
-	bot.sendMessage(chatId, formatMessage(`Ваша букашка ${bukashka.name} отправилась в приключение!\n\nБукашка вернется через 30 секунд. Во время приключения вы не сможете кормить букашку.`), {
-		parse_mode: "MarkdownV2"
-	});
-}
+	await bot.sendMessage(
+		chatId, 
+		formatMessage(`Ваша букашка ${bukashka.name} отправилась в приключение!\n\nБукашка вернется через 30 секунд. Во время приключения вы не сможете кормить букашку.`), 
+		{ parse_mode: "MarkdownV2" }
+	);
+};
 
 // Функция для отправки сообщения об отсутствии букашки
-async function emptyPetMsg(chatId) {
+const emptyPetMsg = async (chatId) => {
 	await bot.sendMessage(
 		chatId,
 		formatMessage("У вас пока нет букашки! Используйте команду 'взять букашку', чтобы завести питомца. 🐛"),
 		{ parse_mode: "MarkdownV2" }
 	);
-}
+};
