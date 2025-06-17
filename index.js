@@ -9,6 +9,7 @@ const {
   normalizeCommand,
 } = require('./config/actions');
 const BukashkaManager = require('./config/BukashkaManager');
+const { TEXT } = require('./config/text');
 
 require("dotenv").config();
 
@@ -32,7 +33,7 @@ bot.on("text", async (msg) => {
     const normalizedText = normalizeCommand(msg.text);
 
     if (msg.text.startsWith("/start")) {
-      await bot.sendMessage(msg.chat.id, `Вы запустили бота! 👋🏻`, {
+      await bot.sendMessage(msg.chat.id, formatMessage(TEXT.START.WELCOME), {
         reply_markup: {
           keyboard: [
             ["⭐️ Взять букашку", "⭐️ Покормить"],
@@ -43,23 +44,7 @@ bot.on("text", async (msg) => {
         },
       });
     } else if (msg.text === "/help" || normalizedText === "help") {
-      const helpMessage = formatMessage(`Доступные команды бота: 🐛
-
-/start - Запуск бота и получение основного меню
-/help - Показать это сообщение с описанием команд
-
-Основные действия:
-⭐️ Взять букашку - Завести нового питомца
-⭐️ Покормить - Покормить вашу букашку
-⭐️ Моя букашка - Посмотреть информацию о вашем питомце
-⭐️ Картинка - Отправить фото для вашей букашки
-🎒 Букашку в приключение - Отправить букашку в 6-часовое приключение
-❓ Где букашка - Проверить статус приключения
-раздавить букашку - Позволит вам избавиться от питомца
-
-Важно: Букашка требует регулярного ухода! Не забывайте кормить её и следить за уровнем счастья.`);
-
-      await bot.sendMessage(msg.chat.id, helpMessage, {
+      await bot.sendMessage(msg.chat.id, formatMessage(TEXT.HELP), {
         parse_mode: "MarkdownV2"
       });
     } else if (normalizedText === "взять букашку") {
@@ -67,7 +52,7 @@ bot.on("text", async (msg) => {
       if (bukashkaManager.getBukashka(userId)) {
         await bot.sendMessage(
           msg.chat.id,
-          formatMessage("У вас уже есть букашка! Если хотите завести новую, сначала раздавите текущую."),
+          formatMessage(TEXT.STATUS.ALREADY_EXISTS),
           { parse_mode: "MarkdownV2" }
         );
         return;
@@ -75,7 +60,7 @@ bot.on("text", async (msg) => {
 
       await bot.sendMessage(
         msg.chat.id,
-        formatMessage("Как вы хотите назвать вашу букашку?"),
+        formatMessage(TEXT.START.NEW_BUKASHKA),
         { parse_mode: "MarkdownV2" }
       );
 
@@ -85,7 +70,7 @@ bot.on("text", async (msg) => {
 
         await bot.sendMessage(
           msg.chat.id,
-          formatMessage(`Поздравляем! Теперь у вас есть букашка по имени ${buakakaName}! 🎉\n\nИспользуйте команду "покормить", чтобы покормить вашу букашку.`),
+          formatMessage(TEXT.START.CONGRATULATIONS(buakakaName)),
           { parse_mode: "MarkdownV2" }
         );
       });
@@ -100,7 +85,7 @@ bot.on("text", async (msg) => {
       if (bukashka.isAdventuring) {
         await bot.sendMessage(
           msg.chat.id,
-          formatMessage("Ваша букашка сейчас в приключении и не может есть! Подождите, пока она вернется. 🎒"),
+          formatMessage(TEXT.FEED.IN_ADVENTURE),
           { parse_mode: "MarkdownV2" }
         );
         return;
@@ -114,7 +99,7 @@ bot.on("text", async (msg) => {
         const remainingTime = Math.ceil((3000 - (now - lastFeed)) / 1000);
         await bot.sendMessage(
           msg.chat.id,
-          formatMessage(`Подождите еще ${remainingTime} сек. перед следующим кормлением! ⏳`),
+          formatMessage(TEXT.FEED.WAIT(remainingTime)),
           { parse_mode: "MarkdownV2" }
         );
         return;
@@ -145,7 +130,7 @@ bot.on("text", async (msg) => {
           return;
         }
       } catch (error) {
-        await bot.sendMessage(msg.chat.id, "Произошла ошибка при кормлении букашки. Попробуйте еще раз.");
+        await bot.sendMessage(msg.chat.id, TEXT.FEED.ERROR);
       }
     } else if (normalizedText === "моя букашка") {
       const userId = msg.from.id;
@@ -160,7 +145,7 @@ bot.on("text", async (msg) => {
 **Сытость:** ${bukashka.feed} 🌱  
 **Счастье:** ${bukashka.happy} 😊
 
-Ваша букашка очень рада вас видеть! 💖
+${TEXT.FEED.HAPPY}
 `), { parse_mode: "MarkdownV2" });
       } else {
         await bukashkaManager.emptyPetMsg(msg.chat.id);
@@ -177,7 +162,7 @@ bot.on("text", async (msg) => {
         const timeLeft = bukashkaManager.getAdventureTimeLeft(userId);
         await bot.sendMessage(
           msg.chat.id,
-          formatMessage(`Ваша букашка ${bukashka.name} уже в приключении! 🎒\n\nОсталось времени: ${formatTimeLeft(timeLeft)}`),
+          formatMessage(TEXT.ADVENTURE.IN_PROGRESS(bukashka.name, formatTimeLeft(timeLeft))),
           { parse_mode: "MarkdownV2" }
         );
         return;
@@ -195,7 +180,7 @@ bot.on("text", async (msg) => {
 
         await bot.sendMessage(
           msg.chat.id,
-          formatMessage(`⚠️ Внимание! Уровень сытости вашей букашки слишком низкий (меньше 10). Если приключение окажется неудачным, букашка может умереть от голода!`),
+          formatMessage(TEXT.ADVENTURE.LOW_FEED),
           {
             parse_mode: "MarkdownV2",
             reply_markup: keyboard
@@ -213,20 +198,14 @@ bot.on("text", async (msg) => {
         return;
       }
 
-      if (bukashkaManager.isInAdventure(userId)) {
-        const timeLeft = bukashkaManager.getAdventureTimeLeft(userId);
-        await bot.sendMessage(
-          msg.chat.id,
-          formatMessage(`Ваша букашка ${bukashka.name} сейчас в приключении! 🎒\n\nОсталось времени: ${formatTimeLeft(timeLeft)}\n\nВы можете проверить её состояние, используя команду "Моя букашка".`),
-          { parse_mode: "MarkdownV2" }
-        );
-      } else {
-        await bot.sendMessage(
-          msg.chat.id,
-          formatMessage(`Ваша букашка ${bukashka.name} сейчас дома и готова к новым приключениям! 🏠\n\nИспользуйте команду "Букашку в приключение", чтобы отправить её в путешествие.`),
-          { parse_mode: "MarkdownV2" }
-        );
-      }
+      const isAdventuring = bukashkaManager.isInAdventure(userId);
+      const timeLeft = isAdventuring ? bukashkaManager.getAdventureTimeLeft(userId) : 0;
+
+      await bot.sendMessage(
+        msg.chat.id,
+        formatMessage(TEXT.ADVENTURE.LOCATION(bukashka.name, isAdventuring, formatTimeLeft(timeLeft))),
+        { parse_mode: "MarkdownV2" }
+      );
     } else if (normalizedText === "раздавить букашку") {
       const userId = msg.from.id;
       if (bukashkaManager.getBukashka(userId)) {
@@ -272,7 +251,7 @@ bot.on("photo", async (msg) => {
 **Сытость:** ${bukashka.feed} 🌱  
 **Счастье:** ${bukashka.happy} 😊
 
-Ваша букашка очень рада вас видеть! 💖
+${TEXT.FEED.HAPPY}
 `),
         parse_mode: "MarkdownV2"
       });
@@ -290,7 +269,7 @@ bot.on('callback_query', async (query) => {
   const bukashka = bukashkaManager.getBukashka(chatId);
 
   if (!bukashka) {
-    bot.answerCallbackQuery(query.id, { text: "У вас нет букашки!" });
+    bot.answerCallbackQuery(query.id, { text: TEXT.STATUS.NO_BUKASHKA });
     return;
   }
 
@@ -302,7 +281,7 @@ bot.on('callback_query', async (query) => {
     bot.deleteMessage(chatId, query.message.message_id);
     await bot.sendMessage(
       chatId,
-      formatMessage(`Букашка ${bukashka.name} благодарна за вашу заботу! 🥰\n\nЛучше подождать, пока она наберется сил, и тогда отправиться в приключение вместе. 💖`),
+      formatMessage(TEXT.ADVENTURE.CANCEL(bukashka.name)),
       { parse_mode: "MarkdownV2" }
     );
   }
