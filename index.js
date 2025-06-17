@@ -2,14 +2,11 @@ const TelegramBot = require("node-telegram-bot-api");
 const fs = require("fs");
 const { COMMANDS, DEFAULT_BUKASHKA, ADVENTURES } = require('./config/constants');
 const {
-  formatTimeLeft,
-  formatMessage,
-  calculateAge,
   getFeedResult,
   normalizeCommand,
-  formatBukashkaInfo,
   sendBukashkaInfo
 } = require('./config/actions');
+const { formatTimeLeft, formatMessage } = require('./utils/helpers');
 const BukashkaManager = require('./config/BukashkaManager');
 const { TEXT } = require('./config/text');
 
