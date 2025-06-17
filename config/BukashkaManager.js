@@ -1,4 +1,5 @@
 const { formatMessage, formatTimeLeft } = require('./actions');
+const { TEXT } = require('./text');
 
 class BukashkaManager {
   constructor(bot) {
@@ -39,7 +40,7 @@ class BukashkaManager {
 
     await this.bot.sendMessage(
       chatId,
-      formatMessage(`Ваша букашка ${bukashka.name} отправилась в приключение!\n\nБукашка вернется через ${formatTimeLeft(30)}. Во время приключения вы не сможете кормить букашку.`),
+      formatMessage(TEXT.ADVENTURE.START(bukashka.name, formatTimeLeft(30))),
       { parse_mode: "MarkdownV2" }
     );
   }
@@ -58,15 +59,7 @@ class BukashkaManager {
     delete this.adventureStartTime[chatId];
     bukashka.isAdventuring = false;
 
-    const resultMessage = formatMessage(`
-🎒 *Приключение завершено!* 🎒
-
-${adventure.text}
-
-Эффекты:
-${adventure.feed > 0 ? '+' : ''}${adventure.feed} к сытости 🌱
-${adventure.happiness > 0 ? '+' : ''}${adventure.happiness} к счастью 😊
-`);
+    const resultMessage = formatMessage(TEXT.ADVENTURE.COMPLETE(adventure.text, adventure.feed, adventure.happiness));
 
     await this.bot.sendMessage(chatId, resultMessage, {
       parse_mode: "MarkdownV2",
@@ -91,14 +84,7 @@ ${adventure.happiness > 0 ? '+' : ''}${adventure.happiness} к счастью �
         bukashka.happy = Math.max(0, bukashka.happy - 5);
 
         if (bukashka.feed < 10 && [10, 5, 1].includes(bukashka.feed)) {
-          const hungerMessage = formatMessage(`
-                    ⚠️ *Внимание!* Ваша букашка ${bukashka.name} голодна! 🐛
-
-                    Текущий уровень сытости: ${bukashka.feed} 🌱
-                    Пожалуйста, покормите вашего питомца, используя команду "⭐️ Покормить"!
-                    `);
-
-          await this.bot.sendMessage(chatId, hungerMessage, {
+          await this.bot.sendMessage(chatId, formatMessage(TEXT.FEED.HUNGRY(bukashka.name, bukashka.feed)), {
             parse_mode: "MarkdownV2",
           });
         }
@@ -121,17 +107,11 @@ ${adventure.happiness > 0 ? '+' : ''}${adventure.happiness} к счастью �
     if (this.userBukashki[userId]) {
       const bukashka = this.userBukashki[userId];
       const age = Math.floor((Date.now() - new Date(bukashka.creationDate)) / (24 * 60 * 60 * 1000));
-      const deathMessage = formatMessage(`💀 *Ваша букашка ${bukashka.name} умерла!* 
-
-Причина: ${reason}
-Возраст: ${formatTimeLeft(age * 24 * 60 * 60)}
-
-Вы можете завести новую букашку, используя команду "⭐️ Взять букашку"`);
 
       this.stopFeedTimer(userId);
       delete this.userBukashki[userId];
 
-      await this.bot.sendMessage(chatId, deathMessage, {
+      await this.bot.sendMessage(chatId, formatMessage(TEXT.STATUS.DEAD(reason, formatTimeLeft(age * 24 * 60 * 60))), {
         parse_mode: "MarkdownV2"
       });
     }
@@ -154,7 +134,7 @@ ${adventure.happiness > 0 ? '+' : ''}${adventure.happiness} к счастью �
   async emptyPetMsg(chatId) {
     await this.bot.sendMessage(
       chatId,
-      formatMessage("У вас пока нет букашки! Используйте команду 'взять букашку', чтобы завести питомца. 🐛"),
+      formatMessage(TEXT.STATUS.NO_BUKASHKA),
       { parse_mode: "MarkdownV2" }
     );
   }
