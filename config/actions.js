@@ -1,3 +1,5 @@
+const { TEXT } = require('./text');
+
 // Функция для форматирования оставшегося времени
 const formatTimeLeft = (timeLeft) => {
   const days = Math.floor(timeLeft / (24 * 60 * 60));
@@ -62,8 +64,8 @@ const formatBukashkaInfo = (bukashka, feedChange = 0, happinessChange = 0) => {
 **Счастье:** ${happinessDisplay} 😊
 
 ${feedChange || happinessChange
-      ? "Спасибо, что покормили вашу букашку! 💖"
-      : "Ваша букашка очень рада вас видеть! 💖"
+      ? TEXT.FEED.THANKS
+      : TEXT.FEED.HAPPY
     }
   `);
 };
@@ -116,28 +118,28 @@ const getFeedResult = (bukashkaName) => {
       type: "говняшка",
       amount: -5,
       happiness: -10,
-      message: formatMessage(`😱 *О нет!* Ваша ${bukashkaName} случайно съела говняшку! 💩\nСытость уменьшилась на 5 🌱\nСчастье уменьшилось на 10 😢`),
+      message: formatMessage(TEXT.FEED.BAD_FOOD(bukashkaName)),
     };
   } else if (random < 60) {
     return {
       type: "водичку",
       amount: 5,
       happiness: 0,
-      message: formatMessage(`${bukashkaName} выпила водичку 🍽️\nСытость увеличилась на 5 🌱`),
+      message: formatMessage(TEXT.FEED.WATER(bukashkaName)),
     };
   } else if (random < 90) {
     return {
       type: "листик",
       amount: 10,
       happiness: 5,
-      message: formatMessage(`${bukashkaName} съела листик 🍽️\nСытость увеличилась на 10 🌱\nСчастье увеличилось на 5 😊`),
+      message: formatMessage(TEXT.FEED.LEAF(bukashkaName)),
     };
   } else {
     return {
       type: "яблочко",
       amount: 20,
       happiness: 15,
-      message: formatMessage(`🎉 *Невероятно!* 🎉\n\nВаша ${bukashkaName} нашла и съела яблочко! 🍎\nСытость увеличилась на 20 🌱\nСчастье увеличилось на 15 😊\n\nВаша букашка очень счастлива! 💖`),
+      message: formatMessage(TEXT.FEED.APPLE(bukashkaName)),
     };
   }
 };
