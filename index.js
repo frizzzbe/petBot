@@ -29,9 +29,9 @@ bot.setMyCommands(COMMANDS);
 
 bot.on("text", async (msg) => {
   try {
-    const normalizedText = normalizeCommand(msg.text);
+    const userRequest = normalizeCommand(msg.text);
 
-    if (msg.text.startsWith("/start")) {
+    if (msg.text === "/start") {
       await bot.sendMessage(msg.chat.id, formatMessage(TEXT.START.WELCOME), {
         reply_markup: {
           keyboard: [
@@ -42,11 +42,11 @@ bot.on("text", async (msg) => {
           resize_keyboard: true,
         },
       });
-    } else if (msg.text === "/help" || normalizedText === "help") {
+    } else if (msg.text === "/help") {
       await bot.sendMessage(msg.chat.id, formatMessage(TEXT.HELP), {
         parse_mode: "MarkdownV2"
       });
-    } else if (normalizedText === "взять букашку") {
+    } else if (userRequest === "взять букашку") {
       const userId = msg.from.id;
       if (bukashkaManager.getBukashka(userId)) {
         await bot.sendMessage(
@@ -73,7 +73,7 @@ bot.on("text", async (msg) => {
           { parse_mode: "MarkdownV2" }
         );
       });
-    } else if (normalizedText === "покормить") {
+    } else if (userRequest === "покормить") {
       const userId = msg.from.id;
       const bukashka = bukashkaManager.getBukashka(userId);
       if (!bukashka) {
@@ -131,7 +131,7 @@ bot.on("text", async (msg) => {
       } catch (error) {
         await bot.sendMessage(msg.chat.id, TEXT.FEED.ERROR);
       }
-    } else if (normalizedText === "моя букашка") {
+    } else if (userRequest === "моя букашка") {
       const userId = msg.from.id;
       const bukashka = bukashkaManager.getBukashka(userId);
       if (bukashka) {
@@ -139,7 +139,7 @@ bot.on("text", async (msg) => {
       } else {
         await bukashkaManager.emptyPetMsg(msg.chat.id);
       }
-    } else if (normalizedText === "букашку в приключение") {
+    } else if (userRequest === "букашку в приключение") {
       const userId = msg.from.id;
       const bukashka = bukashkaManager.getBukashka(userId);
       if (!bukashka) {
@@ -179,7 +179,7 @@ bot.on("text", async (msg) => {
       }
 
       await bukashkaManager.startAdventure(msg.chat.id, ADVENTURES);
-    } else if (normalizedText === "где букашка") {
+    } else if (userRequest === "где букашка") {
       const userId = msg.from.id;
       const bukashka = bukashkaManager.getBukashka(userId);
       if (!bukashka) {
@@ -195,7 +195,7 @@ bot.on("text", async (msg) => {
         formatMessage(TEXT.ADVENTURE.LOCATION(bukashka.name, isAdventuring, formatTimeLeft(timeLeft))),
         { parse_mode: "MarkdownV2" }
       );
-    } else if (normalizedText === "раздавить букашку") {
+    } else if (userRequest === "раздавить букашку") {
       const userId = msg.from.id;
       if (bukashkaManager.getBukashka(userId)) {
         await bukashkaManager.killBukashka(userId, msg.chat.id, "раздавлена хозяином");
