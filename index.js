@@ -7,6 +7,8 @@ const {
   calculateAge,
   getFeedResult,
   normalizeCommand,
+  formatBukashkaInfo,
+  sendBukashkaInfo
 } = require('./config/actions');
 const BukashkaManager = require('./config/BukashkaManager');
 const { TEXT } = require('./config/text');
@@ -136,17 +138,7 @@ bot.on("text", async (msg) => {
       const userId = msg.from.id;
       const bukashka = bukashkaManager.getBukashka(userId);
       if (bukashka) {
-        await bot.sendMessage(msg.chat.id, formatMessage(`
-✨ Информация о вашей букашке! 🐛
-
-**Имя:** ${bukashka.name}  
-**Возраст:** ${calculateAge(bukashka.creationDate)}  
-**Уровень:** ${bukashka.level}  
-**Сытость:** ${bukashka.feed} 🌱  
-**Счастье:** ${bukashka.happy} 😊
-
-${TEXT.FEED.HAPPY}
-`), { parse_mode: "MarkdownV2" });
+        await sendBukashkaInfo(msg.chat.id, bukashka, 0, 0, bot);
       } else {
         await bukashkaManager.emptyPetMsg(msg.chat.id);
       }
@@ -241,20 +233,7 @@ bot.on("photo", async (msg) => {
 
     if (bukashka) {
       bukashka.image = photo.file_id;
-      await bot.sendPhoto(msg.chat.id, photo.file_id, {
-        caption: formatMessage(`
-✨ Информация о вашей букашке! 🐛
-
-**Имя:** ${bukashka.name}  
-**Возраст:** ${calculateAge(bukashka.creationDate)}  
-**Уровень:** ${bukashka.level}  
-**Сытость:** ${bukashka.feed} 🌱  
-**Счастье:** ${bukashka.happy} 😊
-
-${TEXT.FEED.HAPPY}
-`),
-        parse_mode: "MarkdownV2"
-      });
+      await sendBukashkaInfo(msg.chat.id, bukashka, 0, 0, bot);
     } else {
       await bukashkaManager.emptyPetMsg(msg.chat.id);
     }
