@@ -172,7 +172,7 @@ bot.on("text", async (msg) => {
         return;
       }
 
-      if (bukashkaManager.isInAdventure(userId)) {
+      if (bukashka.isInAdventure) {
         const timeLeft = bukashkaManager.getAdventureTimeLeft(userId);
         await bot.sendMessage(
           msg.chat.id,
@@ -202,7 +202,7 @@ bot.on("text", async (msg) => {
         );
         return;
       }
-
+      
       await bukashkaManager.startAdventure(msg.chat.id, ADVENTURES);
     } else if (userRequest === "где букашка") {
       const userId = msg.from.id;
@@ -211,13 +211,12 @@ bot.on("text", async (msg) => {
         await bukashkaManager.emptyPetMsg(msg.chat.id);
         return;
       }
-
-      const isAdventuring = bukashkaManager.isInAdventure(userId);
-      const timeLeft = isAdventuring ? bukashkaManager.getAdventureTimeLeft(userId) : 0;
-
+      
+      const timeLeft = bukashka.isAdventuring ? bukashkaManager.getAdventureTimeLeft(userId) : 0;
+      
       await bot.sendMessage(
         msg.chat.id,
-        formatMessage(TEXT.ADVENTURE.LOCATION(bukashka.name, isAdventuring, formatTimeLeft(timeLeft))),
+        formatMessage(TEXT.ADVENTURE.LOCATION(bukashka.name, bukashka.isAdventuring, formatTimeLeft(timeLeft))),
         { parse_mode: "MarkdownV2" }
       );
     } else if (userRequest === "раздавить букашку") {

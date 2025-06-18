@@ -13,12 +13,6 @@ class BukashkaManager {
     this.adventureStartTime = {};
   }
 
-  async isInAdventure(userId) {
-    const snapshot = await this.petsRef.child(userId).once('value');
-    const bukashka = snapshot.val();
-    return bukashka && bukashka.isAdventuring;
-  }
-
   async getAdventureTimeLeft(userId) {
     const startTime = this.adventureStartTime[userId];
     if (!startTime) return 0;
@@ -97,7 +91,7 @@ class BukashkaManager {
       const bukashka = snapshot.val();
       
       if (bukashka) {
-        if (await this.isInAdventure(userId)) return;
+        if (bukashka.isInAdventure) return;
 
         const newFeed = Math.max(0, bukashka.feed - 1);
         const newHappy = Math.max(0, bukashka.happy - 5);
