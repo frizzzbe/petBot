@@ -1,5 +1,6 @@
 const { TEXT } = require('./text');
 const { formatTimeLeft, escapeMarkdown, formatMessage } = require('../utils/helpers');
+const admin = require('firebase-admin');
 
 // Функция для форматирования информации о букашке
 const formatBukashkaInfo = (bukashka, feedChange = 0, happinessChange = 0) => {
@@ -34,11 +35,16 @@ ${feedChange || happinessChange
 
 // Функция для отправки информации о букашке
 const sendBukashkaInfo = async (chatId, bukashka, feedChange = 0, happinessChange = 0, bot) => {
-  const message = formatBukashkaInfo(bukashka, feedChange, happinessChange);
+  // Получаем актуальные данные из Firebase
+  const petsRef = admin.database().ref('pets');
+  const snapshot = await petsRef.child(chatId).once('value');
+  const currentBukashka = snapshot.val() || bukashka;
 
-  if (bukashka.image) {
+  const message = formatBukashkaInfo(currentBukashka, feedChange, happinessChange);
+
+  if (currentBukashka.image) {
     // Если есть фото букашки, отправляем его с информацией
-    await bot.sendPhoto(chatId, bukashka.image, {
+    await bot.sendPhoto(chatId, currentBukashka.image, {
       caption: message,
       parse_mode: "MarkdownV2",
     });

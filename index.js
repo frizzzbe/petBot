@@ -56,69 +56,16 @@ bot.on("text", async (msg) => {
           ],
           resize_keyboard: true,
         },
+        parse_mode: "MarkdownV2"
       });
     } else if (msg.text === "/help") {
       await bot.sendMessage(msg.chat.id, formatMessage(TEXT.HELP), {
         parse_mode: "MarkdownV2"
       });
-    } else if (userRequest === "букашку в бд") {
-      const newBukashkaData = {
-        chatId: 'someNewChatId123',
-        name: 'Buddy',
-        feed: 100,
-        happy: 100,
-        image: 'url_to_buddy.png',
-        isAdventuring: false,
-        adventureEndTime: null,
-        lastFeedTime: Date.now()
-      };
-      
-      // Assuming the userId is 'newUserId45678'
-      const userId = 'newUserId45678';
-      
-      // Use .set() to write data to a specific path (overwriting anything already there)
-      petsRef.child(userId).set(newBukashkaData)
-        .then(() => {
-          console.log(`Bukashka for user ${userId} saved successfully!`);
-        })
-        .catch((error) => {
-          console.error('Error saving bukashka:', error);
-        });
-    } else if (userRequest === "букашку из бд") {
-      const userId = 'newUserId45678';
-      
-      petsRef.child(userId).once('value')
-      .then((snapshot) => {
-        if (snapshot.exists()) {
-          const bukashkaData = snapshot.val();
-          console.log(`Data for bukashka ${userId}:`, bukashkaData);
-        } else {
-          console.log(`Bukashka with userId ${userId} does not exist.`);
-        }
-      })
-      .catch((error) => {
-        console.error('Error reading bukashka:', error);
-      });
-      
-      const userIdToUpdate = 'someUserId12345'; // Replace with a real userId
-
-      // Обновление в БД
-// // Update the feed and lastFeedTime
-// const updates = {
-//   feed: 100, // Max feed
-//   lastFeedTime: Date.now()
-// };
-
-// bukashkasRef.child(userIdToUpdate).update(updates)
-//   .then(() => {
-//     console.log(`Bukashka ${userIdToUpdate} updated successfully!`);
-//   })
-//   .catch((error) => {
-//     console.error('Error updating bukashka:', error);
-//   });
     } else if (userRequest === "взять букашку") {
       const userId = msg.from.id;
-      if (bukashkaManager.getBukashka(userId)) {
+      const existingBukashka = await bukashkaManager.getBukashka(userId);
+      if (existingBukashka) {
         await bot.sendMessage(
           msg.chat.id,
           formatMessage(TEXT.STATUS.ALREADY_EXISTS),
@@ -145,7 +92,7 @@ bot.on("text", async (msg) => {
       });
     } else if (userRequest === "покормить") {
       const userId = msg.from.id;
-      const bukashka = bukashkaManager.getBukashka(userId);
+      const bukashka = await bukashkaManager.getBukashka(userId);
       if (!bukashka) {
         await bukashkaManager.emptyPetMsg(msg.chat.id);
         return;
@@ -181,8 +128,15 @@ bot.on("text", async (msg) => {
         bukashkaManager.lastFeedTime[userId] = now;
 
         // Увеличиваем сытость и счастье в зависимости от результата
-        bukashka.feed = Math.max(0, Math.min(100, bukashka.feed + feedResult.amount));
-        bukashka.happy = Math.max(0, Math.min(100, bukashka.happy + feedResult.happiness));
+        const newFeed = Math.max(0, Math.min(100, bukashka.feed + feedResult.amount));
+        const newHappy = Math.max(0, Math.min(100, bukashka.happy + feedResult.happiness));
+
+        // Обновляем значения в базе данных
+        await bukashkaManager.petsRef.child(userId).update({
+          feed: newFeed,
+          happy: newHappy,
+          lastFeedTime: now
+        });
 
         try {
           await bot.sendMessage(msg.chat.id, formatMessage(feedResult.message), {
@@ -194,16 +148,17 @@ bot.on("text", async (msg) => {
         }
 
         // Проверяем, не умерла ли букашка от неприятной еды
-        if (bukashka.feed === 0 && feedResult.type === "говняшка") {
+        if (newFeed === 0 && feedResult.type === "говняшка") {
           await bukashkaManager.killBukashka(userId, msg.chat.id, "Поела говна и померла 😢");
           return;
         }
       } catch (error) {
+        console.error('Error while feeding:', error);
         await bot.sendMessage(msg.chat.id, TEXT.FEED.ERROR);
       }
     } else if (userRequest === "моя букашка") {
       const userId = msg.from.id;
-      const bukashka = bukashkaManager.getBukashka(userId);
+      const bukashka = await bukashkaManager.getBukashka(userId);
       if (bukashka) {
         await sendBukashkaInfo(msg.chat.id, bukashka, 0, 0, bot);
       } else {
@@ -211,7 +166,7 @@ bot.on("text", async (msg) => {
       }
     } else if (userRequest === "букашку в приключение") {
       const userId = msg.from.id;
-      const bukashka = bukashkaManager.getBukashka(userId);
+      const bukashka = await bukashkaManager.getBukashka(userId);
       if (!bukashka) {
         await bukashkaManager.emptyPetMsg(msg.chat.id);
         return;
@@ -251,7 +206,7 @@ bot.on("text", async (msg) => {
       await bukashkaManager.startAdventure(msg.chat.id, ADVENTURES);
     } else if (userRequest === "где букашка") {
       const userId = msg.from.id;
-      const bukashka = bukashkaManager.getBukashka(userId);
+      const bukashka = await bukashkaManager.getBukashka(userId);
       if (!bukashka) {
         await bukashkaManager.emptyPetMsg(msg.chat.id);
         return;
@@ -267,7 +222,8 @@ bot.on("text", async (msg) => {
       );
     } else if (userRequest === "раздавить букашку") {
       const userId = msg.from.id;
-      if (bukashkaManager.getBukashka(userId)) {
+      const bukashka = await bukashkaManager.getBukashka(userId);
+      if (bukashka) {
         await bukashkaManager.killBukashka(userId, msg.chat.id, "раздавлена хозяином");
       } else {
         await bukashkaManager.emptyPetMsg(msg.chat.id);
@@ -288,7 +244,7 @@ bot.on("text", async (msg) => {
       }, 2000);
     }
   } catch (error) {
-    console.log(error);
+    console.error(error);
   }
 });
 
@@ -296,7 +252,7 @@ bot.on("photo", async (msg) => {
   try {
     const userId = msg.from.id;
     const photo = msg.photo[msg.photo.length - 1];
-    const bukashka = bukashkaManager.getBukashka(userId);
+    const bukashka = await bukashkaManager.getBukashka(userId);
 
     if (bukashka) {
       bukashka.image = photo.file_id;
@@ -305,14 +261,14 @@ bot.on("photo", async (msg) => {
       await bukashkaManager.emptyPetMsg(msg.chat.id);
     }
   } catch (error) {
-    console.log(error);
+    console.error(error);
   }
 });
 
 // Добавляем обработчик для кнопок
 bot.on('callback_query', async (query) => {
   const chatId = query.message.chat.id;
-  const bukashka = bukashkaManager.getBukashka(chatId);
+  const bukashka = await bukashkaManager.getBukashka(chatId);
 
   if (!bukashka) {
     bot.answerCallbackQuery(query.id, { text: TEXT.STATUS.NO_BUKASHKA });
