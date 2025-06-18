@@ -1,16 +1,31 @@
+require('dotenv').config();
+
 const TelegramBot = require("node-telegram-bot-api");
+const admin = require("firebase-admin");
 const fs = require("fs");
+const serviceAccount = require("./db-access.json");
+
+// Internal dependencies
 const { COMMANDS, DEFAULT_BUKASHKA, ADVENTURES } = require('./config/constants');
-const {
+const { 
   getFeedResult,
   normalizeCommand,
-  sendBukashkaInfo
+  sendBukashkaInfo 
 } = require('./config/actions');
 const { formatTimeLeft, formatMessage } = require('./utils/helpers');
 const BukashkaManager = require('./config/BukashkaManager');
 const { TEXT } = require('./config/text');
 
-require("dotenv").config();
+// Firebase initialization
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+  databaseURL: process.env.FIREBASE_KEY_URL
+});
+
+// Database references
+const db = admin.database();
+const rootRef = db.ref('/');
+const petsRef = db.ref('pets');
 
 const bot = new TelegramBot(process.env.API_KEY_BOT, {
   polling: true,
@@ -46,6 +61,61 @@ bot.on("text", async (msg) => {
       await bot.sendMessage(msg.chat.id, formatMessage(TEXT.HELP), {
         parse_mode: "MarkdownV2"
       });
+    } else if (userRequest === "букашку в бд") {
+      const newBukashkaData = {
+        chatId: 'someNewChatId123',
+        name: 'Buddy',
+        feed: 100,
+        happy: 100,
+        image: 'url_to_buddy.png',
+        isAdventuring: false,
+        adventureEndTime: null,
+        lastFeedTime: Date.now()
+      };
+      
+      // Assuming the userId is 'newUserId45678'
+      const userId = 'newUserId45678';
+      
+      // Use .set() to write data to a specific path (overwriting anything already there)
+      petsRef.child(userId).set(newBukashkaData)
+        .then(() => {
+          console.log(`Bukashka for user ${userId} saved successfully!`);
+        })
+        .catch((error) => {
+          console.error('Error saving bukashka:', error);
+        });
+    } else if (userRequest === "букашку из бд") {
+      const userId = 'newUserId45678';
+      
+      petsRef.child(userId).once('value')
+      .then((snapshot) => {
+        if (snapshot.exists()) {
+          const bukashkaData = snapshot.val();
+          console.log(`Data for bukashka ${userId}:`, bukashkaData);
+        } else {
+          console.log(`Bukashka with userId ${userId} does not exist.`);
+        }
+      })
+      .catch((error) => {
+        console.error('Error reading bukashka:', error);
+      });
+      
+      const userIdToUpdate = 'someUserId12345'; // Replace with a real userId
+
+      // Обновление в БД
+// // Update the feed and lastFeedTime
+// const updates = {
+//   feed: 100, // Max feed
+//   lastFeedTime: Date.now()
+// };
+
+// bukashkasRef.child(userIdToUpdate).update(updates)
+//   .then(() => {
+//     console.log(`Bukashka ${userIdToUpdate} updated successfully!`);
+//   })
+//   .catch((error) => {
+//     console.error('Error updating bukashka:', error);
+//   });
     } else if (userRequest === "взять букашку") {
       const userId = msg.from.id;
       if (bukashkaManager.getBukashka(userId)) {
