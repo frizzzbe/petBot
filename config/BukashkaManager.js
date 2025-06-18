@@ -8,16 +8,19 @@ class BukashkaManager {
     this.db = admin.database();
     this.petsRef = this.db.ref('pets');
     this.feedTimers = {};
-    this.lastFeedTime = {};
     this.adventureTimers = {};
-    this.adventureStartTime = {};
   }
 
   async getAdventureTimeLeft(userId) {
-    const startTime = this.adventureStartTime[userId];
-    if (!startTime) return 0;
+    const snapshot = await this.petsRef.child(userId).once('value');
+    const bukashka = snapshot.val();
+    
+    if (!bukashka || !bukashka.isAdventuring || !bukashka.adventureStartTime) {
+      return 0;
+    }
 
     const now = Date.now();
+    const startTime = bukashka.adventureStartTime;
     const elapsed = Math.floor((now - startTime) / 1000);
     return Math.max(0, 30 - elapsed);
   }
@@ -29,14 +32,14 @@ class BukashkaManager {
 
     const adventure = ADVENTURES[Math.floor(Math.random() * ADVENTURES.length)];
     
-    // Обновляем данные в Firebase
+    // Обновляем данные в Firebase с временными метками
     await this.petsRef.child(chatId).update({
       isAdventuring: true,
-      adventureResult: adventure
+      adventureResult: adventure,
+      adventureStartTime: Date.now()
     });
 
-    this.adventureStartTime[chatId] = Date.now();
-
+    // Устанавливаем таймер для завершения приключения
     this.adventureTimers[chatId] = setTimeout(() => {
       this.completeAdventure(chatId);
     }, 30 * 1000);
@@ -54,6 +57,7 @@ class BukashkaManager {
     if (!bukashka || !bukashka.isAdventuring) return;
 
     const adventure = bukashka.adventureResult;
+    if (!adventure) return;
 
     const newFeed = Math.max(0, Math.min(100, bukashka.feed + adventure.feed));
     const newHappy = Math.max(0, Math.min(100, bukashka.happy + adventure.happiness));
@@ -63,12 +67,12 @@ class BukashkaManager {
       feed: newFeed,
       happy: newHappy,
       isAdventuring: false,
-      adventureResult: null
+      adventureResult: null,
+      adventureStartTime: null
     });
 
     clearTimeout(this.adventureTimers[chatId]);
     delete this.adventureTimers[chatId];
-    delete this.adventureStartTime[chatId];
 
     const resultMessage = formatMessage(TEXT.ADVENTURE.COMPLETE(adventure.text, adventure.feed, adventure.happiness));
 
@@ -91,7 +95,7 @@ class BukashkaManager {
       const bukashka = snapshot.val();
       
       if (bukashka) {
-        if (bukashka.isInAdventure) return;
+        if (bukashka.isAdventuring) return;
 
         const newFeed = Math.max(0, bukashka.feed - 1);
         const newHappy = Math.max(0, bukashka.happy - 5);
@@ -144,6 +148,8 @@ class BukashkaManager {
     const bukashkaData = {
       name,
       creationDate: new Date().toISOString(),
+      lastFeedTime: Date.now(),
+      adventureStartTime: null,
       ...DEFAULT_BUKASHKA
     };
 
@@ -164,6 +170,20 @@ class BukashkaManager {
       formatMessage(TEXT.STATUS.NO_BUKASHKA),
       { parse_mode: "MarkdownV2" }
     );
+  }
+
+  // Метод для получения времени последнего кормления из базы данных
+  async getLastFeedTime(userId) {
+    const snapshot = await this.petsRef.child(userId).once('value');
+    const bukashka = snapshot.val();
+    return bukashka ? bukashka.lastFeedTime : 0;
+  }
+
+  // Метод для обновления времени последнего кормления в базе данных
+  async updateLastFeedTime(userId, timestamp) {
+    await this.petsRef.child(userId).update({
+      lastFeedTime: timestamp
+    });
   }
 }
 

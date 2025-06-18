@@ -109,7 +109,7 @@ bot.on("text", async (msg) => {
 
       // Проверяем, прошло ли 3 секунды с последнего кормления
       const now = Date.now();
-      const lastFeed = bukashkaManager.lastFeedTime[userId] || 0;
+      const lastFeed = await bukashkaManager.getLastFeedTime(userId);
 
       if (now - lastFeed < 3000) {
         const remainingTime = Math.ceil((3000 - (now - lastFeed)) / 1000);
@@ -124,8 +124,8 @@ bot.on("text", async (msg) => {
       try {
         const feedResult = getFeedResult(bukashka.name);
 
-        // Обновляем время последнего кормления
-        bukashkaManager.lastFeedTime[userId] = now;
+        // Обновляем время последнего кормления в базе данных
+        await bukashkaManager.updateLastFeedTime(userId, now);
 
         // Увеличиваем сытость и счастье в зависимости от результата
         const newFeed = Math.max(0, Math.min(100, bukashka.feed + feedResult.amount));
@@ -134,8 +134,7 @@ bot.on("text", async (msg) => {
         // Обновляем значения в базе данных
         await bukashkaManager.petsRef.child(userId).update({
           feed: newFeed,
-          happy: newHappy,
-          lastFeedTime: now
+          happy: newHappy
         });
 
         try {
@@ -211,8 +210,8 @@ bot.on("text", async (msg) => {
         await bukashkaManager.emptyPetMsg(msg.chat.id);
         return;
       }
-      
-      const timeLeft = bukashka.isAdventuring ? bukashkaManager.getAdventureTimeLeft(userId) : 0;
+
+      const timeLeft = bukashka.isAdventuring ? await bukashkaManager.getAdventureTimeLeft(userId) : 0;
       
       await bot.sendMessage(
         msg.chat.id,
