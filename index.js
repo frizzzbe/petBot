@@ -240,7 +240,7 @@ bot.on("photo", async (msg) => {
     const bukashka = await petObject.getBukashka(userId);
 
     if (bukashka) {
-      bukashka.image = photo.file_id;
+      await petObject.updloadPetImage(userId, photo.file_id);
       await sendBukashkaInfo(msg.chat.id, bukashka, 0, 0, bot);
     } else {
       await petObject.emptyPetMsg(msg.chat.id);

@@ -185,6 +185,13 @@ class PetManager {
       lastFeedTime: timestamp
     });
   }
+
+  // Установить фотографию для букашки
+  async updloadPetImage(userId, image) {
+    await this.petsRef.child(userId).update({
+      image: image
+    });
+  }
 }
 
 module.exports = PetManager; 
