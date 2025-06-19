@@ -20,11 +20,13 @@ const formatBukashkaInfo = (bukashka, feedChange = 0, happinessChange = 0) => {
   return formatMessage(`
 ✨ Информация о вашей букашке! 🐛
 
-**Имя:** ${bukashka.name}  
-**Возраст:** ${formatTimeLeft(ageInSeconds)}  
-**Уровень:** ${bukashka.level}  
-**Сытость:** ${feedDisplay} 🌱  
-**Счастье:** ${happinessDisplay} 😊
+*Имя:* ${bukashka.name}
+*Возраст:* ${formatTimeLeft(ageInSeconds)}
+*Уровень:* ${bukashka.level}
+*Сытость:* ${feedDisplay} 🌱
+*Счастье:* ${happinessDisplay} 😊
+*Монетки:* ${bukashka.coins || 0} 🪙
+*Статус:* ${bukashka.isAdventuring ? 'В приключении! 🧭' : 'Дома 🏡'}
 
 ${feedChange || happinessChange
       ? TEXT.FEED.THANKS

@@ -62,19 +62,33 @@ class PetManager {
     const newFeed = Math.max(0, Math.min(100, bukashka.feed + adventure.feed));
     const newHappy = Math.max(0, Math.min(100, bukashka.happy + adventure.happiness));
 
+    // Логика монеток
+    let coinsEarned = 0;
+    if (adventure.feed < 0 && adventure.happiness < 0) {
+      coinsEarned = Math.floor(Math.random() * 41) + 10; // 10-50 монет
+    } else if (adventure.feed > 0 || adventure.happiness > 0) {
+      coinsEarned = Math.floor(Math.random() * 15) + 5; // 5-20 монет
+    } else {
+      coinsEarned = Math.floor(Math.random() * 5) + 1; // 1-5 монет
+    }
+    const newCoins = (bukashka.coins || 0) + coinsEarned;
+
     // Обновляем данные в Firebase
     await this.petsRef.child(chatId).update({
       feed: newFeed,
       happy: newHappy,
       isAdventuring: false,
       adventureResult: null,
-      adventureStartTime: null
+      adventureStartTime: null,
+      coins: newCoins
     });
 
     clearTimeout(this.adventureTimers[chatId]);
     delete this.adventureTimers[chatId];
 
-    const resultMessage = formatMessage(TEXT.ADVENTURE.COMPLETE(adventure.text, adventure.feed, adventure.happiness));
+    const resultMessage = formatMessage(
+      `${TEXT.ADVENTURE.COMPLETE(adventure.text, adventure.feed, adventure.happiness, coinsEarned)}`
+    );
 
     await this.bot.sendMessage(chatId, resultMessage, {
       parse_mode: "MarkdownV2",
@@ -150,6 +164,7 @@ class PetManager {
       creationDate: new Date().toISOString(),
       lastFeedTime: Date.now(),
       adventureStartTime: null,
+      coins: 0,
       ...DEFAULT_BUKASHKA
     };
 
@@ -191,6 +206,18 @@ class PetManager {
     await this.petsRef.child(userId).update({
       image: image
     });
+  }
+
+  // Получить время последней игры
+  async getLastGameTime(userId) {
+    const snapshot = await this.petsRef.child(userId).once('value');
+    const bukashka = snapshot.val();
+    return bukashka && bukashka.lastGameTime ? bukashka.lastGameTime : 0;
+  }
+
+  // Обновить время последней игры
+  async updateLastGameTime(userId, timestamp) {
+    await this.petsRef.child(userId).update({ lastGameTime: timestamp });
   }
 }
 

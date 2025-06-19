@@ -7,10 +7,10 @@ const serviceAccount = require("./db-access.json");
 const PetManager = require('./config/PetManager');
 const { COMMANDS, DEFAULT_BUKASHKA, ADVENTURES } = require('./config/constants');
 const { TEXT } = require('./config/text');
-const { 
+const {
   getFeedResult,
   normalizeCommand,
-  sendBukashkaInfo 
+  sendBukashkaInfo
 } = require('./config/actions');
 const { formatTimeLeft, formatMessage } = require('./utils/helpers');
 
@@ -77,6 +77,34 @@ bot.on("text", async (msg) => {
           { parse_mode: "MarkdownV2" }
         );
       });
+    } else if (userRequest === "поиграть") {
+      const userId = msg.from.id;
+      const lastGame = await petObject.getLastGameTime(userId);
+      const now = Date.now();
+      if (now - lastGame < 60 * 1000) {
+        const secondsLeft = Math.ceil((60 * 1000 - (now - lastGame)) / 1000);
+        await bot.sendMessage(
+          msg.chat.id,
+          formatMessage(`Поиграть можно только раз в минуту! Подождите еще ${secondsLeft} сек.`),
+          { parse_mode: "MarkdownV2" }
+        );
+
+      } else {
+        await bot.sendMessage(
+          msg.chat.id,
+          formatMessage("Выберите игру"),
+          {
+            parse_mode: "MarkdownV2", reply_markup: {
+              inline_keyboard: [
+                [
+                  { text: "Бросить кубик", callback_data: "dice" },
+                  { text: "Боулинг", callback_data: "bowling" }
+                ]
+              ]
+            }
+          }
+        );
+      }
     } else if (userRequest === "покормить") {
       const userId = msg.from.id;
       const bukashka = await petObject.getBukashka(userId);
@@ -188,7 +216,7 @@ bot.on("text", async (msg) => {
         );
         return;
       }
-      
+
       await petObject.startAdventure(msg.chat.id, ADVENTURES);
     } else if (userRequest === "где букашка") {
       const userId = msg.from.id;
@@ -199,7 +227,7 @@ bot.on("text", async (msg) => {
       }
 
       const timeLeft = bukashka.isAdventuring ? await petObject.getAdventureTimeLeft(userId) : 0;
-      
+
       await bot.sendMessage(
         msg.chat.id,
         formatMessage(TEXT.ADVENTURE.LOCATION(bukashka.name, bukashka.isAdventuring, formatTimeLeft(timeLeft))),
@@ -271,5 +299,64 @@ bot.on('callback_query', async (query) => {
       formatMessage(TEXT.ADVENTURE.CANCEL(bukashka.name)),
       { parse_mode: "MarkdownV2" }
     );
+  } else if (query.data === "dice" || query.data === "bowling") {
+    bot.answerCallbackQuery(query.id);
+
+    await bot.deleteMessage(chatId, query.message.message_id);
+
+    const lastGame = await petObject.getLastGameTime(chatId);
+    const now = Date.now();
+    if (now - lastGame < 60 * 1000) {
+      const secondsLeft = Math.ceil((60 * 1000 - (now - lastGame)) / 1000);
+      await bot.sendMessage(
+        chatId,
+        formatMessage(`Поиграть можно только раз в минуту! Подождите еще ${secondsLeft} сек.`),
+        { parse_mode: "MarkdownV2" }
+      );
+      return;
+    }
+    const { dice } = await bot.sendDice(chatId, { emoji: query.data === "dice" ? "🎲" : "🎳" });
+    let happyChange = 0;
+    let coinsChange = 0;
+    switch (dice.value) {
+      case 1:
+        happyChange = -5;
+        break;
+      case 2:
+        happyChange = -3;
+        break;
+      case 3:
+        happyChange = 0;
+        break;
+      case 4:
+        happyChange = 3;
+        break;
+      case 5:
+        happyChange = 5;
+        break;
+      case 6:
+        happyChange = 6;
+        coinsChange = 15;
+        break;
+    }
+    // Обновляем параметры питомца
+    const pet = await petObject.getBukashka(chatId);
+    if (pet) {
+      const newHappy = Math.max(0, Math.min(100, (pet.happy || 0) + happyChange));
+      const newCoins = (pet.coins || 0) + coinsChange;
+      await petObject.petsRef.child(chatId).update({
+        happy: newHappy,
+        coins: newCoins
+      });
+      let msg = `🎲 ${dice.value === 6 && 'ОООООО ГАДЕМ!\n'}Выпало: ${dice.value}\n`;
+      if (happyChange > 0) msg += `Счастье: +${happyChange} 😊\n`;
+      if (happyChange < 0) msg += `Счастье: ${happyChange} 😕\n`;
+      if (coinsChange > 0) msg += `Монетки: +${coinsChange} 🪙`;
+      if (happyChange === 0 && coinsChange === 0) msg += `Без изменений.`;
+      setTimeout(async () => {
+        await bot.sendMessage(chatId, formatMessage(msg), { parse_mode: "MarkdownV2" });
+      }, 3500)
+    }
+    await petObject.updateLastGameTime(chatId, Date.now());
   }
 });
