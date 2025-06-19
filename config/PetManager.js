@@ -2,7 +2,7 @@ const { formatMessage, formatTimeLeft } = require('./actions');
 const { TEXT } = require('./text');
 const admin = require('firebase-admin');
 
-class BukashkaManager {
+class PetManager {
   constructor(bot) {
     this.bot = bot;
     this.db = admin.database();
@@ -187,4 +187,4 @@ class BukashkaManager {
   }
 }
 
-module.exports = BukashkaManager; 
+module.exports = PetManager; 

@@ -2,19 +2,17 @@ require('dotenv').config();
 
 const TelegramBot = require("node-telegram-bot-api");
 const admin = require("firebase-admin");
-const fs = require("fs");
 const serviceAccount = require("./db-access.json");
 
-// Internal dependencies
+const PetManager = require('./config/PetManager');
 const { COMMANDS, DEFAULT_BUKASHKA, ADVENTURES } = require('./config/constants');
+const { TEXT } = require('./config/text');
 const { 
   getFeedResult,
   normalizeCommand,
   sendBukashkaInfo 
 } = require('./config/actions');
 const { formatTimeLeft, formatMessage } = require('./utils/helpers');
-const BukashkaManager = require('./config/BukashkaManager');
-const { TEXT } = require('./config/text');
 
 // Firebase initialization
 admin.initializeApp({
@@ -22,22 +20,11 @@ admin.initializeApp({
   databaseURL: process.env.FIREBASE_KEY_URL
 });
 
-// Database references
-const db = admin.database();
-const rootRef = db.ref('/');
-const petsRef = db.ref('pets');
-
 const bot = new TelegramBot(process.env.API_KEY_BOT, {
   polling: true,
 });
 
-const bukashkaManager = new BukashkaManager(bot);
-
-//Массив с объектами для меню команд
-const commands = [
-  { command: "start", description: "Запуск бота" },
-  { command: "help", description: "Раздел помощи" },
-];
+const petObject = new PetManager(bot);
 
 // Устанавливаем меню команд
 bot.setMyCommands(COMMANDS);
@@ -64,7 +51,7 @@ bot.on("text", async (msg) => {
       });
     } else if (userRequest === "взять букашку") {
       const userId = msg.from.id;
-      const existingBukashka = await bukashkaManager.getBukashka(userId);
+      const existingBukashka = await petObject.getBukashka(userId);
       if (existingBukashka) {
         await bot.sendMessage(
           msg.chat.id,
@@ -82,7 +69,7 @@ bot.on("text", async (msg) => {
 
       bot.once("message", async (nameMsg) => {
         const buakakaName = nameMsg.text;
-        await bukashkaManager.createBukashka(userId, msg.chat.id, buakakaName, DEFAULT_BUKASHKA);
+        await petObject.createBukashka(userId, msg.chat.id, buakakaName, DEFAULT_BUKASHKA);
 
         await bot.sendMessage(
           msg.chat.id,
@@ -92,9 +79,9 @@ bot.on("text", async (msg) => {
       });
     } else if (userRequest === "покормить") {
       const userId = msg.from.id;
-      const bukashka = await bukashkaManager.getBukashka(userId);
+      const bukashka = await petObject.getBukashka(userId);
       if (!bukashka) {
-        await bukashkaManager.emptyPetMsg(msg.chat.id);
+        await petObject.emptyPetMsg(msg.chat.id);
         return;
       }
 
@@ -109,7 +96,7 @@ bot.on("text", async (msg) => {
 
       // Проверяем, прошло ли 3 секунды с последнего кормления
       const now = Date.now();
-      const lastFeed = await bukashkaManager.getLastFeedTime(userId);
+      const lastFeed = await petObject.getLastFeedTime(userId);
 
       if (now - lastFeed < 3000) {
         const remainingTime = Math.ceil((3000 - (now - lastFeed)) / 1000);
@@ -125,14 +112,14 @@ bot.on("text", async (msg) => {
         const feedResult = getFeedResult(bukashka.name);
 
         // Обновляем время последнего кормления в базе данных
-        await bukashkaManager.updateLastFeedTime(userId, now);
+        await petObject.updateLastFeedTime(userId, now);
 
         // Увеличиваем сытость и счастье в зависимости от результата
         const newFeed = Math.max(0, Math.min(100, bukashka.feed + feedResult.amount));
         const newHappy = Math.max(0, Math.min(100, bukashka.happy + feedResult.happiness));
 
         // Обновляем значения в базе данных
-        await bukashkaManager.petsRef.child(userId).update({
+        await petObject.petsRef.child(userId).update({
           feed: newFeed,
           happy: newHappy
         });
@@ -148,7 +135,7 @@ bot.on("text", async (msg) => {
 
         // Проверяем, не умерла ли букашка от неприятной еды
         if (newFeed === 0 && feedResult.type === "говняшка") {
-          await bukashkaManager.killBukashka(userId, msg.chat.id, "Поела говна и померла 😢");
+          await petObject.killBukashka(userId, msg.chat.id, "Поела говна и померла 😢");
           return;
         }
       } catch (error) {
@@ -157,22 +144,22 @@ bot.on("text", async (msg) => {
       }
     } else if (userRequest === "моя букашка") {
       const userId = msg.from.id;
-      const bukashka = await bukashkaManager.getBukashka(userId);
+      const bukashka = await petObject.getBukashka(userId);
       if (bukashka) {
         await sendBukashkaInfo(msg.chat.id, bukashka, 0, 0, bot);
       } else {
-        await bukashkaManager.emptyPetMsg(msg.chat.id);
+        await petObject.emptyPetMsg(msg.chat.id);
       }
     } else if (userRequest === "букашку в приключение") {
       const userId = msg.from.id;
-      const bukashka = await bukashkaManager.getBukashka(userId);
+      const bukashka = await petObject.getBukashka(userId);
       if (!bukashka) {
-        await bukashkaManager.emptyPetMsg(msg.chat.id);
+        await petObject.emptyPetMsg(msg.chat.id);
         return;
       }
 
       if (bukashka.isInAdventure) {
-        const timeLeft = bukashkaManager.getAdventureTimeLeft(userId);
+        const timeLeft = petObject.getAdventureTimeLeft(userId);
         await bot.sendMessage(
           msg.chat.id,
           formatMessage(TEXT.ADVENTURE.IN_PROGRESS(bukashka.name, formatTimeLeft(timeLeft))),
@@ -202,16 +189,16 @@ bot.on("text", async (msg) => {
         return;
       }
       
-      await bukashkaManager.startAdventure(msg.chat.id, ADVENTURES);
+      await petObject.startAdventure(msg.chat.id, ADVENTURES);
     } else if (userRequest === "где букашка") {
       const userId = msg.from.id;
-      const bukashka = await bukashkaManager.getBukashka(userId);
+      const bukashka = await petObject.getBukashka(userId);
       if (!bukashka) {
-        await bukashkaManager.emptyPetMsg(msg.chat.id);
+        await petObject.emptyPetMsg(msg.chat.id);
         return;
       }
 
-      const timeLeft = bukashka.isAdventuring ? await bukashkaManager.getAdventureTimeLeft(userId) : 0;
+      const timeLeft = bukashka.isAdventuring ? await petObject.getAdventureTimeLeft(userId) : 0;
       
       await bot.sendMessage(
         msg.chat.id,
@@ -220,11 +207,11 @@ bot.on("text", async (msg) => {
       );
     } else if (userRequest === "раздавить букашку") {
       const userId = msg.from.id;
-      const bukashka = await bukashkaManager.getBukashka(userId);
+      const bukashka = await petObject.getBukashka(userId);
       if (bukashka) {
-        await bukashkaManager.killBukashka(userId, msg.chat.id, "раздавлена хозяином");
+        await petObject.killBukashka(userId, msg.chat.id, "раздавлена хозяином");
       } else {
-        await bukashkaManager.emptyPetMsg(msg.chat.id);
+        await petObject.emptyPetMsg(msg.chat.id);
       }
     } else {
       //Отправляем пользователю сообщение
@@ -250,13 +237,13 @@ bot.on("photo", async (msg) => {
   try {
     const userId = msg.from.id;
     const photo = msg.photo[msg.photo.length - 1];
-    const bukashka = await bukashkaManager.getBukashka(userId);
+    const bukashka = await petObject.getBukashka(userId);
 
     if (bukashka) {
       bukashka.image = photo.file_id;
       await sendBukashkaInfo(msg.chat.id, bukashka, 0, 0, bot);
     } else {
-      await bukashkaManager.emptyPetMsg(msg.chat.id);
+      await petObject.emptyPetMsg(msg.chat.id);
     }
   } catch (error) {
     console.error(error);
@@ -266,7 +253,7 @@ bot.on("photo", async (msg) => {
 // Добавляем обработчик для кнопок
 bot.on('callback_query', async (query) => {
   const chatId = query.message.chat.id;
-  const bukashka = await bukashkaManager.getBukashka(chatId);
+  const bukashka = await petObject.getBukashka(chatId);
 
   if (!bukashka) {
     bot.answerCallbackQuery(query.id, { text: TEXT.STATUS.NO_BUKASHKA });
@@ -275,7 +262,7 @@ bot.on('callback_query', async (query) => {
 
   if (query.data === "adventure_risk") {
     bot.answerCallbackQuery(query.id);
-    await bukashkaManager.startAdventure(chatId, ADVENTURES);
+    await petObject.startAdventure(chatId, ADVENTURES);
   } else if (query.data === "adventure_cancel") {
     bot.answerCallbackQuery(query.id);
     bot.deleteMessage(chatId, query.message.message_id);
