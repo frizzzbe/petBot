@@ -39,7 +39,8 @@ bot.on("text", async (msg) => {
           keyboard: [
             ["⭐️ Взять букашку", "⭐️ Покормить"],
             ["⭐️ Моя букашка", "❓ Где букашка"],
-            ["🎒 Букашку в приключение", "💀 Раздавить букашку"]
+            ["🎲 Поиграть", "💀 Раздавить букашку"],
+            ["🎒 Букашку в приключение"],
           ],
           resize_keyboard: true,
         },
@@ -348,11 +349,7 @@ bot.on('callback_query', async (query) => {
         happy: newHappy,
         coins: newCoins
       });
-      let msg = `🎲 ${dice.value === 6 && 'ОООООО ГАДЕМ!\n'}Выпало: ${dice.value}\n`;
-      if (happyChange > 0) msg += `Счастье: +${happyChange} 😊\n`;
-      if (happyChange < 0) msg += `Счастье: ${happyChange} 😕\n`;
-      if (coinsChange > 0) msg += `Монетки: +${coinsChange} 🪙`;
-      if (happyChange === 0 && coinsChange === 0) msg += `Без изменений.`;
+      const msg = TEXT.GAME.DICE_RESULT(dice.value, happyChange, coinsChange);
       setTimeout(async () => {
         await bot.sendMessage(chatId, formatMessage(msg), { parse_mode: "MarkdownV2" });
       }, 3500)
