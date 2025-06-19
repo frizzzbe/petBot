@@ -5,7 +5,7 @@ const admin = require("firebase-admin");
 const serviceAccount = require("./db-access.json");
 
 const PetManager = require('./config/PetManager');
-const { COMMANDS, DEFAULT_BUKASHKA, ADVENTURES } = require('./config/constants');
+const { COMMANDS, DEFAULT_BUKASHKA, ADVENTURES, INTERVALS } = require('./config/constants');
 const { TEXT } = require('./config/text');
 const {
   getFeedResult,
@@ -52,8 +52,8 @@ bot.on("text", async (msg) => {
       });
     } else if (userRequest === "взять букашку") {
       const userId = msg.from.id;
-      const existingBukashka = await petObject.getBukashka(userId);
-      if (existingBukashka) {
+      const pet = await petObject.getBukashka(userId);
+      if (pet) {
         await bot.sendMessage(
           msg.chat.id,
           formatMessage(TEXT.STATUS.ALREADY_EXISTS),
@@ -82,14 +82,13 @@ bot.on("text", async (msg) => {
       const userId = msg.from.id;
       const lastGame = await petObject.getLastGameTime(userId);
       const now = Date.now();
-      if (now - lastGame < 60 * 1000) {
-        const secondsLeft = Math.ceil((60 * 1000 - (now - lastGame)) / 1000);
+      if (now - lastGame < INTERVALS.GAME) {
+        const secondsLeft = Math.ceil((INTERVALS.GAME - (now - lastGame)) / 1000);
         await bot.sendMessage(
           msg.chat.id,
-          formatMessage(`Поиграть можно только раз в минуту! Подождите еще ${secondsLeft} сек.`),
+          formatMessage(`Поиграть можно только раз в минуту! Подождите еще ${formatTimeLeft(secondsLeft)}`),
           { parse_mode: "MarkdownV2" }
         );
-
       } else {
         await bot.sendMessage(
           msg.chat.id,
@@ -127,11 +126,11 @@ bot.on("text", async (msg) => {
       const now = Date.now();
       const lastFeed = await petObject.getLastFeedTime(userId);
 
-      if (now - lastFeed < 3000) {
-        const remainingTime = Math.ceil((3000 - (now - lastFeed)) / 1000);
+      if (now - lastFeed < INTERVALS.FEED) {
+        const remainingTime = Math.ceil((INTERVALS.FEED - (now - lastFeed)) / 1000);
         await bot.sendMessage(
           msg.chat.id,
-          formatMessage(TEXT.FEED.WAIT(remainingTime)),
+          formatMessage(TEXT.FEED.WAIT(formatTimeLeft(remainingTime))),
           { parse_mode: "MarkdownV2" }
         );
         return;
@@ -307,11 +306,11 @@ bot.on('callback_query', async (query) => {
 
     const lastGame = await petObject.getLastGameTime(chatId);
     const now = Date.now();
-    if (now - lastGame < 60 * 1000) {
-      const secondsLeft = Math.ceil((60 * 1000 - (now - lastGame)) / 1000);
+    if (now - lastGame < INTERVALS.GAME) {
+      const secondsLeft = Math.ceil((INTERVALS.GAME - (now - lastGame)) / 1000);
       await bot.sendMessage(
         chatId,
-        formatMessage(`Поиграть можно только раз в минуту! Подождите еще ${secondsLeft} сек.`),
+        formatMessage(`Поиграть можно только раз в минуту! Подождите еще ${formatTimeLeft(secondsLeft)}`),
         { parse_mode: "MarkdownV2" }
       );
       return;

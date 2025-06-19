@@ -118,8 +118,16 @@ const ADVENTURES = [
   }
 ];
 
+// Интервалы (в миллисекундах)
+const INTERVALS = {
+  FEED: 3 * 1000,
+  ADVENTURE: 30 * 1000,
+  GAME: 60 * 1000
+};
+
 module.exports = {
   COMMANDS,
   DEFAULT_BUKASHKA,
-  ADVENTURES
+  ADVENTURES,
+  INTERVALS
 };

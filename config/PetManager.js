@@ -1,5 +1,6 @@
 const { formatMessage, formatTimeLeft } = require('./actions');
 const { TEXT } = require('./text');
+const { INTERVALS } = require('./constants');
 const admin = require('firebase-admin');
 
 class PetManager {
@@ -14,7 +15,7 @@ class PetManager {
   async getAdventureTimeLeft(userId) {
     const snapshot = await this.petsRef.child(userId).once('value');
     const bukashka = snapshot.val();
-    
+
     if (!bukashka || !bukashka.isAdventuring || !bukashka.adventureStartTime) {
       return 0;
     }
@@ -22,7 +23,7 @@ class PetManager {
     const now = Date.now();
     const startTime = bukashka.adventureStartTime;
     const elapsed = Math.floor((now - startTime) / 1000);
-    return Math.max(0, 30 - elapsed);
+    return Math.max(0, INTERVALS.ADVENTURE - elapsed);
   }
 
   async startAdventure(chatId, ADVENTURES) {
@@ -31,7 +32,7 @@ class PetManager {
     if (!bukashka) return;
 
     const adventure = ADVENTURES[Math.floor(Math.random() * ADVENTURES.length)];
-    
+
     // Обновляем данные в Firebase с временными метками
     await this.petsRef.child(chatId).update({
       isAdventuring: true,
@@ -42,11 +43,11 @@ class PetManager {
     // Устанавливаем таймер для завершения приключения
     this.adventureTimers[chatId] = setTimeout(() => {
       this.completeAdventure(chatId);
-    }, 30 * 1000);
+    }, INTERVALS.ADVENTURE);
 
     await this.bot.sendMessage(
       chatId,
-      formatMessage(TEXT.ADVENTURE.START(bukashka.name, formatTimeLeft(30))),
+      formatMessage(TEXT.ADVENTURE.START(bukashka.name, formatTimeLeft(INTERVALS.ADVENTURE))),
       { parse_mode: "MarkdownV2" }
     );
   }
@@ -107,7 +108,7 @@ class PetManager {
     this.feedTimers[userId] = setInterval(async () => {
       const snapshot = await this.petsRef.child(userId).once('value');
       const bukashka = snapshot.val();
-      
+
       if (bukashka) {
         if (bukashka.isAdventuring) return;
 
@@ -143,12 +144,12 @@ class PetManager {
   async killBukashka(userId, chatId, reason) {
     const snapshot = await this.petsRef.child(userId).once('value');
     const bukashka = snapshot.val();
-    
+
     if (bukashka) {
       const age = Math.floor((Date.now() - new Date(bukashka.creationDate)) / (24 * 60 * 60 * 1000));
 
       this.stopFeedTimer(userId);
-      
+
       // Удаляем данные из Firebase
       await this.petsRef.child(userId).remove();
 
