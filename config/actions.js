@@ -120,6 +120,69 @@ const normalizeCommand = (text) => {
   return text.toLowerCase().replace(/[^а-яёa-z0-9\s]/gi, '').trim();
 };
 
+// Универсальная функция проверки интервала
+const checkInterval = async (lastTime, interval, actionName, chatId, bot) => {
+  const now = Date.now();
+  if (now - lastTime < interval) {
+    const left = Math.ceil((interval - (now - lastTime)) / 1000);
+    let msg = '';
+    switch (actionName) {
+      case 'feed':
+        msg = `Подождите еще ${formatTimeLeft(left)} перед следующим кормлением! ⏳`;
+        break;
+      case 'game':
+        msg = `Поиграть можно только раз в минуту! Подождите еще ${formatTimeLeft(left)}`;
+        break;
+      default:
+        msg = `Подождите еще ${formatTimeLeft(left)} до следующего действия.`;
+    }
+    await bot.sendMessage(chatId, formatMessage(msg), { parse_mode: "MarkdownV2" });
+    return true;
+  }
+  return false;
+};
+
+// Универсальный обработчик для мини-игр (dice, bowling)
+const handleGameAction = async (bot, chatId, pet, petsRef, formatMessage, TEXT, gameType, value) => {
+  let happyChange = 0;
+  let coinsChange = 0;
+  let msg = '';
+    switch (value) {
+      case 1:
+        happyChange = -5;
+        break;
+      case 2:
+        happyChange = -3;
+        break;
+      case 3:
+        happyChange = 0;
+        break;
+      case 4:
+        happyChange = 3;
+        break;
+      case 5:
+        happyChange = 5;
+        break;
+      case 6:
+        happyChange = 6;
+        coinsChange = 15;
+        break;
+    }
+    msg = TEXT.GAME.DICE_RESULT(value, happyChange, coinsChange);
+  if (pet) {
+    const newHappy = Math.max(0, Math.min(100, (pet.happy || 0) + happyChange));
+    const newCoins = (pet.coins || 0) + coinsChange;
+    await petsRef.child(pet.userId || chatId).update({
+      happy: newHappy,
+      coins: newCoins
+    });
+    setTimeout(async () => {
+      await bot.sendMessage(chatId, formatMessage(msg), { parse_mode: "MarkdownV2" });
+    }, 3500);
+  }
+  return { happyChange, coinsChange, msg };
+};
+
 module.exports = {
   formatTimeLeft,
   escapeMarkdown,
@@ -128,5 +191,7 @@ module.exports = {
   sendBukashkaInfo,
   calculateAge,
   getFeedResult,
-  normalizeCommand
+  normalizeCommand,
+  checkInterval,
+  handleGameAction
 };
