@@ -10,7 +10,8 @@ const DEFAULT_BUKASHKA = {
   happy: 50,
   image: null,
   isAdventuring: false,
-  adventureResult: null
+  adventureResult: null,
+  coins: 0
 };
 
 // Массив с возможными приключениями и их эффектами
@@ -117,8 +118,16 @@ const ADVENTURES = [
   }
 ];
 
+// Интервалы (в миллисекундах)
+const INTERVALS = {
+  FEED: 3 * 1000,
+  ADVENTURE: 30 * 1000,
+  GAME: 60 * 1000
+};
+
 module.exports = {
   COMMANDS,
   DEFAULT_BUKASHKA,
-  ADVENTURES
+  ADVENTURES,
+  INTERVALS
 };
