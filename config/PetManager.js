@@ -1,6 +1,6 @@
 const { formatMessage, formatTimeLeft } = require('./actions');
 const { TEXT } = require('./text');
-const { INTERVALS } = require('./constants');
+const { INTERVALS, VALUE } = require('./constants');
 const admin = require('firebase-admin');
 
 class PetManager {
@@ -21,9 +21,9 @@ class PetManager {
     }
 
     const now = Date.now();
-    const startTime = bukashka.adventureStartTime;
+    const startTime = new Date(bukashka.adventureStartTime).getTime();
     const elapsed = Math.floor((now - startTime) / 1000);
-    return Math.max(0, INTERVALS.ADVENTURE - elapsed);
+    return Math.max(0, Math.floor(INTERVALS.ADVENTURE / 1000) - elapsed);
   }
 
   async startAdventure(chatId, ADVENTURES) {
@@ -37,7 +37,7 @@ class PetManager {
     await this.petsRef.child(chatId).update({
       isAdventuring: true,
       adventureResult: adventure,
-      adventureStartTime: Date.now()
+      adventureStartTime: new Date().toISOString()
     });
 
     // Устанавливаем таймер для завершения приключения
@@ -47,7 +47,7 @@ class PetManager {
 
     await this.bot.sendMessage(
       chatId,
-      formatMessage(TEXT.ADVENTURE.START(bukashka.name, formatTimeLeft(INTERVALS.ADVENTURE))),
+      formatMessage(TEXT.ADVENTURE.START(bukashka.name, formatTimeLeft(INTERVALS.ADVENTURE / 1000))),
       { parse_mode: "MarkdownV2" }
     );
   }
@@ -100,60 +100,17 @@ class PetManager {
     }
   }
 
-  async startFeedTimer(userId, chatId) {
-    if (this.feedTimers[userId]) {
-      clearInterval(this.feedTimers[userId]);
-    }
-
-    this.feedTimers[userId] = setInterval(async () => {
-      const snapshot = await this.petsRef.child(userId).once('value');
-      const bukashka = snapshot.val();
-
-      if (bukashka) {
-        if (bukashka.isAdventuring) return;
-
-        const newFeed = Math.max(0, bukashka.feed - 1);
-        const newHappy = Math.max(0, bukashka.happy - 5);
-
-        // Обновляем данные в Firebase
-        await this.petsRef.child(userId).update({
-          feed: newFeed,
-          happy: newHappy
-        });
-
-        if (newFeed < 10 && [10, 5, 1].includes(newFeed)) {
-          await this.bot.sendMessage(chatId, formatMessage(TEXT.FEED.HUNGRY(bukashka.name, newFeed)), {
-            parse_mode: "MarkdownV2",
-          });
-        }
-
-        if (newFeed === 0) {
-          await this.killBukashka(userId, chatId, "голод");
-        }
-      }
-    }, 3 * 60 * 60 * 1000);
-  }
-
-  stopFeedTimer(userId) {
-    if (this.feedTimers[userId]) {
-      clearInterval(this.feedTimers[userId]);
-      delete this.feedTimers[userId];
-    }
-  }
-
   async killBukashka(userId, chatId, reason) {
     const snapshot = await this.petsRef.child(userId).once('value');
     const bukashka = snapshot.val();
 
     if (bukashka) {
-      const age = Math.floor((Date.now() - new Date(bukashka.creationDate)) / (24 * 60 * 60 * 1000));
-
-      this.stopFeedTimer(userId);
+      const ageSeconds = Math.floor((Date.now() - new Date(bukashka.creationDate)) / 1000);
 
       // Удаляем данные из Firebase
       await this.petsRef.child(userId).remove();
 
-      await this.bot.sendMessage(chatId, formatMessage(TEXT.STATUS.DEAD(reason, formatTimeLeft(age * 24 * 60 * 60))), {
+      await this.bot.sendMessage(chatId, formatMessage(TEXT.STATUS.DEAD(reason, formatTimeLeft(ageSeconds))), {
         parse_mode: "MarkdownV2"
       });
     }
@@ -163,7 +120,7 @@ class PetManager {
     const bukashkaData = {
       name,
       creationDate: new Date().toISOString(),
-      lastFeedTime: Date.now(),
+      lastFeedTime: "",
       adventureStartTime: null,
       coins: 0,
       ...DEFAULT_BUKASHKA
@@ -171,8 +128,6 @@ class PetManager {
 
     // Сохраняем данные в Firebase
     await this.petsRef.child(userId).set(bukashkaData);
-
-    this.startFeedTimer(userId, chatId);
   }
 
   async getBukashka(userId) {
@@ -192,7 +147,7 @@ class PetManager {
   async getLastFeedTime(userId) {
     const snapshot = await this.petsRef.child(userId).once('value');
     const bukashka = snapshot.val();
-    return bukashka ? bukashka.lastFeedTime : 0;
+    return bukashka && bukashka.lastFeedTime ? new Date(bukashka.lastFeedTime).getTime() : 0;
   }
 
   // Метод для обновления времени последнего кормления в базе данных
@@ -213,12 +168,51 @@ class PetManager {
   async getLastGameTime(userId) {
     const snapshot = await this.petsRef.child(userId).once('value');
     const bukashka = snapshot.val();
-    return bukashka && bukashka.lastGameTime ? bukashka.lastGameTime : 0;
+    return bukashka && bukashka.lastGameTime ? new Date(bukashka.lastGameTime).getTime() : 0;
   }
 
   // Обновить время последней игры
   async updateLastGameTime(userId, timestamp) {
     await this.petsRef.child(userId).update({ lastGameTime: timestamp });
+  }
+
+  // уменьшение сытости и счастья у всех букашек
+  static async batchFeedDecay(bot, petsRef) {
+    const snapshot = await petsRef.once('value');
+    const pets = snapshot.val();
+    if (!pets) return;
+    for (const [userId, bukashka] of Object.entries(pets)) {
+      if (!bukashka) continue;
+      if (bukashka.isAdventuring) continue;
+      const newFeed = Math.max(0, (bukashka.feed || 0) - VALUE.FEED_DECAY);
+      const newHappy = Math.max(0, (bukashka.happy || 0) - VALUE.HAPPY_DECAY);
+      await petsRef.child(userId).update({ feed: newFeed, happy: newHappy });
+      if (newFeed < 10) {
+        await bot.sendMessage(userId, formatMessage(TEXT.FEED.HUNGRY(bukashka.name, newFeed)), {
+          parse_mode: "MarkdownV2",
+        });
+      }
+      if (newFeed <= 0) {
+        const petManager = new PetManager(bot);
+        await petManager.killBukashka(userId, userId, "голод");
+      }
+    }
+  }
+
+  // завершение приключений у всех букашек
+  static async batchCompleteAdventures(bot, petsRef) {
+    const snapshot = await petsRef.once('value');
+    const pets = snapshot.val();
+    if (!pets) return;
+    const now = Date.now();
+    for (const [userId, bukashka] of Object.entries(pets)) {
+      if (!bukashka || !bukashka.isAdventuring || !bukashka.adventureStartTime) continue;
+      const elapsed = Math.floor((now - bukashka.adventureStartTime) / 1000);
+      if (elapsed >= INTERVALS.ADVENTURE / 1000) {
+        const petManager = new PetManager(bot);
+        await petManager.completeAdventure(userId);
+      }
+    }
   }
 }
 
