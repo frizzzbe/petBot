@@ -131,7 +131,7 @@ const checkInterval = async (lastTime, interval, actionName, chatId, bot) => {
         msg = `Подождите еще ${formatTimeLeft(left)} перед следующим кормлением! ⏳`;
         break;
       case 'game':
-        msg = `Поиграть можно только раз в минуту! Подождите еще ${formatTimeLeft(left)}`;
+        msg = `Поиграть можно только раз в минуту!\nПодождите еще ${formatTimeLeft(left)}`;
         break;
       default:
         msg = `Подождите еще ${formatTimeLeft(left)} до следующего действия.`;

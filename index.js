@@ -28,6 +28,14 @@ const bot = new TelegramBot(process.env.API_KEY_BOT, {
 
 const petObject = new PetManager(bot);
 
+// Глобальный cron для batch-обработки голодания и приключений
+const db = admin.database();
+const petsRef = db.ref('pets');
+setInterval(async () => {
+  await PetManager.batchFeedDecay(bot, petsRef);
+  await PetManager.batchCompleteAdventures(bot, petsRef);
+}, 60 * 1000); // раз в минуту
+
 // Устанавливаем меню команд
 bot.setMyCommands(COMMANDS);
 
@@ -61,6 +69,8 @@ bot.on("text", async (msg) => {
           formatMessage(TEXT.STATUS.ALREADY_EXISTS),
           { parse_mode: "MarkdownV2" }
         );
+        // Инициализация таймера голодания для уже существующей букашки
+        petObject.startFeedTimer(userId, msg.chat.id);
         return;
       }
 
@@ -123,7 +133,7 @@ bot.on("text", async (msg) => {
         const feedResult = getFeedResult(bukashka.name);
 
         // Обновляем время последнего кормления в базе данных
-        await petObject.updateLastFeedTime(userId, Date.now());
+        await petObject.updateLastFeedTime(userId, new Date().toISOString());
 
         // Увеличиваем сытость и счастье в зависимости от результата
         const newFeed = Math.max(0, Math.min(100, bukashka.feed + feedResult.amount));
@@ -290,7 +300,7 @@ bot.on('callback_query', async (query) => {
     const { dice } = await bot.sendDice(chatId, { emoji: query.data === "dice" ? "🎲" : "🎳" });
     const pet = await petObject.getBukashka(chatId);
     await handleGameAction(bot, chatId, pet, petObject.petsRef, formatMessage, TEXT, query.data, dice.value);
-    await petObject.updateLastGameTime(chatId, Date.now());
+    await petObject.updateLastGameTime(chatId, new Date().toISOString());
     return;
   }
 });
