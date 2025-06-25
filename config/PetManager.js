@@ -81,14 +81,22 @@ class PetManager {
 
     // Логика монеток
     let coinsEarned = 0;
+    let levelPoints = 0;
     if (adventure.feed < 0 && adventureHappiness < 0) {
       coinsEarned = Math.floor(Math.random() * 41) + 10; // 10-50 монет
+      levelPoints = Math.floor(Math.random() * 4) + 15; // 15-18
     } else if (adventure.feed > 0 || adventureHappiness > 0) {
       coinsEarned = Math.floor(Math.random() * 15) + 5; // 5-20 монет
+      levelPoints = Math.floor(Math.random() * 8) + 3; // 3-10
     } else {
       coinsEarned = Math.floor(Math.random() * 5) + 1; // 1-5 монет
+      levelPoints = Math.floor(Math.random() * 8) + 3; // 3-10
     }
+    // Влияние счастья на уровень
+    const happyCoef = ((bukashka.happy || 0) / 100) + 0.5;
+    levelPoints = Math.floor(levelPoints * happyCoef);
     const newCoins = (bukashka.coins || 0) + coinsEarned;
+    const newLevel = (bukashka.level || 0) + levelPoints;
 
     // Если был активен adventure_boost, сбрасываем его
     let updateData = {
@@ -97,7 +105,8 @@ class PetManager {
       isAdventuring: false,
       adventureResult: null,
       adventureStartTime: null,
-      coins: newCoins
+      coins: newCoins,
+      level: newLevel
     };
     if (bukashka.boost === 'adventure_boost' || usedHappyBoost) {
       updateData.boost = null;
@@ -117,7 +126,7 @@ class PetManager {
     }
 
     const resultMessage = formatMessage(
-      `${TEXT.ADVENTURE.COMPLETE(adventure.text, adventure.feed, adventureHappiness, coinsEarned, usedBoostText)}`
+      `${TEXT.ADVENTURE.COMPLETE(adventure.text, adventure.feed, adventureHappiness, coinsEarned, usedBoostText, levelPoints, newLevel)}`
     );
 
     await this.bot.sendMessage(chatId, resultMessage, {

@@ -27,12 +27,17 @@ const formatBukashkaInfo = (bukashka, feedChange = 0, happinessChange = 0) => {
     boostInfo = `\n*Активный буст:* ${boostName}`;
   }
 
+  // Формат уровня
+  const lvl = Math.floor((bukashka.level || 0) / 100);
+  const lvlRest = (bukashka.level || 0) % 100;
+  const levelDisplay = `${lvl} уровень (${lvlRest}/100)`;
+
   return formatMessage(`
 ✨ Информация о вашей букашке! 🐛
 
 *Имя:* ${bukashka.name}
 *Возраст:* ${formatTimeLeft(ageInSeconds)}
-*Уровень:* ${bukashka.level}
+*Уровень:* ${levelDisplay}
 *Сытость:* ${feedDisplay} 🌱
 *Счастье:* ${happinessDisplay} 😊
 *Монетки:* ${bukashka.coins || 0} 🪙
