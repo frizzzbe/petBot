@@ -17,6 +17,16 @@ const formatBukashkaInfo = (bukashka, feedChange = 0, happinessChange = 0) => {
   const creationDate = new Date(bukashka.creationDate);
   const ageInSeconds = Math.floor((now - creationDate) / 1000);
 
+  // Информация о бусте
+  let boostInfo = '';
+  if (bukashka.boost) {
+    let boostName = '';
+    if (bukashka.boost === 'adventure_boost') boostName = 'Ускорение приключений';
+    if (bukashka.boost === 'happy_boost') boostName = 'Больше счастья';
+    if (bukashka.boost === 'feed_boost') boostName = 'Меньше голода';
+    boostInfo = `\n*Активный буст:* ${boostName}`;
+  }
+
   return formatMessage(`
 ✨ Информация о вашей букашке! 🐛
 
@@ -26,7 +36,7 @@ const formatBukashkaInfo = (bukashka, feedChange = 0, happinessChange = 0) => {
 *Сытость:* ${feedDisplay} 🌱
 *Счастье:* ${happinessDisplay} 😊
 *Монетки:* ${bukashka.coins || 0} 🪙
-*Статус:* ${bukashka.isAdventuring ? 'В приключении! 🧭' : 'Дома 🏡'}
+*Статус:* ${bukashka.isAdventuring ? 'В приключении! 🧭' : 'Дома 🏡'}${boostInfo}
 
 ${feedChange || happinessChange
       ? TEXT.FEED.THANKS

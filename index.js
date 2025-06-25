@@ -31,6 +31,10 @@ const petObject = new PetManager(bot);
 // Глобальный cron для batch-обработки голодания и приключений
 const db = admin.database();
 const petsRef = db.ref('pets');
+
+// Проверка и завершение просроченных приключений при запуске
+PetManager.checkAndFinishAdventures(bot, petsRef);
+
 setInterval(async () => {
   await PetManager.batchFeedDecay(bot, petsRef);
   await PetManager.batchCompleteAdventures(bot, petsRef);
@@ -219,7 +223,16 @@ bot.on("text", async (msg) => {
         return;
       }
 
-      const timeLeft = bukashka.isAdventuring ? await petObject.getAdventureTimeLeft(userId) : 0;
+      let timeLeft = 0;
+      if (bukashka.isAdventuring && bukashka.adventureStartTime) {
+        let adventureInterval = INTERVALS.ADVENTURE;
+        if (bukashka.boost === 'adventure_boost') {
+          adventureInterval = Math.floor(adventureInterval / 1.5);
+        }
+        const startTime = new Date(bukashka.adventureStartTime).getTime();
+        const now = Date.now();
+        timeLeft = Math.max(0, Math.floor((startTime + adventureInterval - now) / 1000));
+      }
 
       await bot.sendMessage(
         msg.chat.id,
@@ -235,9 +248,13 @@ bot.on("text", async (msg) => {
         await petObject.emptyPetMsg(msg.chat.id);
       }
     } else if (userRequest === "магазин") {
-      // Проверяем активный буст
+      // Проверяем активный буст и статус приключения
       const userId = msg.from.id;
       const bukashka = await petObject.getBukashka(userId);
+      if (bukashka && bukashka.isAdventuring) {
+        await bot.sendMessage(msg.chat.id, 'Нельзя посещать магазин, пока букашка находится в приключении!');
+        return;
+      }
       let boostInfo = '';
       if (bukashka && bukashka.boost) {
         let boostName = '';
@@ -339,6 +356,10 @@ bot.on('callback_query', async (query) => {
     if (query.data === "boost_happy") { boostType = "happy_boost"; price = 20; boostText = 'Больше счастья'; }
     if (query.data === "boost_feed") { boostType = "feed_boost"; price = 15; boostText = 'Меньше голода'; }
     // Проверка: нельзя купить тот же буст повторно
+    if (bukashka && bukashka.isAdventuring) {
+      await bot.sendMessage(chatId, 'Нельзя покупать бусты, пока букашка находится в приключении!');
+      return;
+    }
     if (bukashka && bukashka.boost === boostType) {
       await bot.sendMessage(chatId, formatMessage(TEXT.SHOP.ALREADY_THIS_BOOST(boostText)), { parse_mode: "MarkdownV2" });
       return;

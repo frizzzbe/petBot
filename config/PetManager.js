@@ -1,6 +1,6 @@
 const { formatMessage, formatTimeLeft } = require('./actions');
 const { TEXT } = require('./text');
-const { INTERVALS, VALUE } = require('./constants');
+const { INTERVALS, VALUE, FEED_BOOST_DURATION_MINUTES } = require('./constants');
 const admin = require('firebase-admin');
 
 class PetManager {
@@ -35,8 +35,10 @@ class PetManager {
 
     // Проверяем наличие ускоряющего буста
     let adventureInterval = INTERVALS.ADVENTURE;
+    let usedAdventureBoost = false;
     if (bukashka.boost === 'adventure_boost') {
       adventureInterval = Math.floor(INTERVALS.ADVENTURE / 1.5);
+      usedAdventureBoost = true;
     }
 
     // Обновляем данные в Firebase с временными метками
@@ -47,8 +49,8 @@ class PetManager {
     });
 
     // Устанавливаем таймер для завершения приключения
-    this.adventureTimers[chatId] = setTimeout(() => {
-      this.completeAdventure(chatId);
+    this.adventureTimers[chatId] = setTimeout(async () => {
+      await this.completeAdventure(chatId);
     }, adventureInterval);
 
     await this.bot.sendMessage(
@@ -66,35 +68,56 @@ class PetManager {
     const adventure = bukashka.adventureResult;
     if (!adventure) return;
 
+    // Применяем буст на счастье, если он есть
+    let adventureHappiness = adventure.happiness;
+    let usedHappyBoost = false;
+    if (bukashka.boost === 'happy_boost' && adventureHappiness > 0) {
+      adventureHappiness = Math.round(adventureHappiness * 1.5);
+      usedHappyBoost = true;
+    }
+
     const newFeed = Math.max(0, Math.min(100, bukashka.feed + adventure.feed));
-    const newHappy = Math.max(0, Math.min(100, bukashka.happy + adventure.happiness));
+    const newHappy = Math.max(0, Math.min(100, bukashka.happy + adventureHappiness));
 
     // Логика монеток
     let coinsEarned = 0;
-    if (adventure.feed < 0 && adventure.happiness < 0) {
+    if (adventure.feed < 0 && adventureHappiness < 0) {
       coinsEarned = Math.floor(Math.random() * 41) + 10; // 10-50 монет
-    } else if (adventure.feed > 0 || adventure.happiness > 0) {
+    } else if (adventure.feed > 0 || adventureHappiness > 0) {
       coinsEarned = Math.floor(Math.random() * 15) + 5; // 5-20 монет
     } else {
       coinsEarned = Math.floor(Math.random() * 5) + 1; // 1-5 монет
     }
     const newCoins = (bukashka.coins || 0) + coinsEarned;
 
-    // Обновляем данные в Firebase
-    await this.petsRef.child(chatId).update({
+    // Если был активен adventure_boost, сбрасываем его
+    let updateData = {
       feed: newFeed,
       happy: newHappy,
       isAdventuring: false,
       adventureResult: null,
       adventureStartTime: null,
       coins: newCoins
-    });
+    };
+    if (bukashka.boost === 'adventure_boost' || usedHappyBoost) {
+      updateData.boost = null;
+    }
+
+    // Обновляем данные в Firebase
+    await this.petsRef.child(chatId).update(updateData);
 
     clearTimeout(this.adventureTimers[chatId]);
     delete this.adventureTimers[chatId];
 
+    let usedBoostText = null;
+    if (bukashka.boost === 'adventure_boost') {
+      usedBoostText = 'Был использован буст: Ускорение приключений.';
+    } else if (usedHappyBoost) {
+      usedBoostText = 'Был использован буст: Больше счастья.';
+    }
+
     const resultMessage = formatMessage(
-      `${TEXT.ADVENTURE.COMPLETE(adventure.text, adventure.feed, adventure.happiness, coinsEarned)}`
+      `${TEXT.ADVENTURE.COMPLETE(adventure.text, adventure.feed, adventureHappiness, coinsEarned, usedBoostText)}`
     );
 
     await this.bot.sendMessage(chatId, resultMessage, {
@@ -190,10 +213,17 @@ class PetManager {
     for (const [userId, bukashka] of Object.entries(pets)) {
       if (!bukashka) continue;
       if (bukashka.isAdventuring) continue;
-      // Учитываем буст на меньше голода
       let feedDecay = VALUE.FEED_DECAY;
+
+      // Проверяем срок действия feed_boost
       if (bukashka.boost === 'feed_boost') {
-        feedDecay = feedDecay / 1.5;
+        if (!bukashka.feedBoostUntil || Date.now() > new Date(bukashka.feedBoostUntil).getTime()) {
+          await petsRef.child(userId).update({ boost: null, feedBoostUntil: null });
+        } else {
+          feedDecay = feedDecay / 1.5;
+        }
+      } else if (bukashka.feedBoostUntil) {
+        await petsRef.child(userId).update({ feedBoostUntil: null });
       }
       const newFeed = Math.max(0, (bukashka.feed || 0) - feedDecay);
       const newHappy = Math.max(0, (bukashka.happy || 0) - VALUE.HAPPY_DECAY);
@@ -237,14 +267,48 @@ class PetManager {
     if (bukashka.boost) {
       replaced = bukashka.boost;
     }
-    await this.petsRef.child(userId).update({
+    
+    let updateData = {
       boost: boostType,
       coins: (bukashka.coins || 0) - price
-    });
+    };
+    if (boostType === 'feed_boost') {
+      updateData.feedBoostUntil = new Date(Date.now() + INTERVALS.FEED_BOOST_DURATION).toISOString();
+    } else {
+      updateData.feedBoostUntil = null;
+    }
+    await this.petsRef.child(userId).update(updateData);
     if (replaced) {
       return { replaced, newBoost: boostType };
     }
     return true;
+  }
+
+  // Проверка и завершение просроченных приключений
+  static async checkAndFinishAdventures(bot, petsRef) {
+    const snapshot = await petsRef.once('value');
+    const pets = snapshot.val();
+    if (!pets) return;
+    const now = Date.now();
+    for (const [userId, bukashka] of Object.entries(pets)) {
+      if (!bukashka || !bukashka.isAdventuring || !bukashka.adventureStartTime) continue;
+      let adventureInterval = require('./constants').INTERVALS.ADVENTURE;
+      if (bukashka.boost === 'adventure_boost') {
+        adventureInterval = Math.floor(adventureInterval / 1.5);
+      }
+      const startTime = new Date(bukashka.adventureStartTime).getTime();
+      const left = (startTime + adventureInterval) - now;
+      const petManager = new PetManager(bot);
+      if (left <= 0) {
+        await petManager.completeAdventure(userId);
+      } else {
+        // Восстанавливаем таймер на остаток времени
+        if (!petManager.adventureTimers) petManager.adventureTimers = {};
+        petManager.adventureTimers[userId] = setTimeout(() => {
+          petManager.completeAdventure(userId);
+        }, left);
+      }
+    }
   }
 }
 
