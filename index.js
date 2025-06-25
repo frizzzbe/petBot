@@ -50,7 +50,7 @@ bot.on("text", async (msg) => {
             ["⭐️ Взять букашку", "⭐️ Покормить"],
             ["⭐️ Моя букашка", "❓ Где букашка"],
             ["🎲 Поиграть", "💀 Раздавить букашку"],
-            ["🎒 Букашку в приключение"],
+            ["🎒 Букашку в приключение", "🏪 Магазин"],
           ],
           resize_keyboard: true,
         },
@@ -234,6 +234,34 @@ bot.on("text", async (msg) => {
       } else {
         await petObject.emptyPetMsg(msg.chat.id);
       }
+    } else if (userRequest === "магазин") {
+      // Проверяем активный буст
+      const userId = msg.from.id;
+      const bukashka = await petObject.getBukashka(userId);
+      let boostInfo = '';
+      if (bukashka && bukashka.boost) {
+        let boostName = '';
+        if (bukashka.boost === 'adventure_boost') boostName = 'Ускорение приключений';
+        if (bukashka.boost === 'happy_boost') boostName = 'Больше счастья';
+        if (bukashka.boost === 'feed_boost') boostName = 'Меньше голода';
+        boostInfo = formatMessage(TEXT.SHOP.ACTIVE_INFO(boostName)) + '\n\n';
+      }
+      await bot.sendMessage(
+        msg.chat.id,
+        formatMessage(TEXT.SHOP.WELCOME) + `\n\n${boostInfo}`,
+        {
+          reply_markup: {
+            inline_keyboard: [
+              [
+                { text: "Ускорение приключений", callback_data: "boost_adventure" },
+                { text: "Больше счастья", callback_data: "boost_happy" },
+                { text: "Меньше голода", callback_data: "boost_feed" }
+              ]
+            ]
+          },
+          parse_mode: "MarkdownV2"
+        }
+      );
     } else {
       //Отправляем пользователю сообщение
       const msgWait = await bot.sendMessage(
@@ -301,6 +329,38 @@ bot.on('callback_query', async (query) => {
     const pet = await petObject.getBukashka(chatId);
     await handleGameAction(bot, chatId, pet, petObject.petsRef, formatMessage, TEXT, query.data, dice.value);
     await petObject.updateLastGameTime(chatId, new Date().toISOString());
+    return;
+  } else if (query.data === "boost_adventure" || query.data === "boost_happy" || query.data === "boost_feed") {
+    bot.answerCallbackQuery(query.id);
+    let boostType = null;
+    let price = 0;
+    let boostText = '';
+    if (query.data === "boost_adventure") { boostType = "adventure_boost"; price = 30; boostText = 'Ускорение приключений'; }
+    if (query.data === "boost_happy") { boostType = "happy_boost"; price = 20; boostText = 'Больше счастья'; }
+    if (query.data === "boost_feed") { boostType = "feed_boost"; price = 15; boostText = 'Меньше голода'; }
+    // Проверка: нельзя купить тот же буст повторно
+    if (bukashka && bukashka.boost === boostType) {
+      await bot.sendMessage(chatId, formatMessage(TEXT.SHOP.ALREADY_THIS_BOOST(boostText)), { parse_mode: "MarkdownV2" });
+      return;
+    }
+    const success = await petObject.setBoost(chatId, boostType, price);
+    if (success === true) {
+      await bot.sendMessage(chatId, formatMessage(TEXT.SHOP.SUCCESS(boostText, price)), { parse_mode: "MarkdownV2" });
+    } else if (success && success.replaced) {
+      let oldBoostName = '';
+      if (success.replaced === 'adventure_boost') oldBoostName = 'Ускорение приключений';
+      if (success.replaced === 'happy_boost') oldBoostName = 'Больше счастья';
+      if (success.replaced === 'feed_boost') oldBoostName = 'Меньше голода';
+      await bot.sendMessage(chatId, formatMessage(TEXT.SHOP.REPLACED_BOOST(oldBoostName, boostText, price)), { parse_mode: "MarkdownV2" });
+    } else if (success && success.already) {
+      let boostName = '';
+      if (success.current === 'adventure_boost') boostName = 'Ускорение приключений';
+      if (success.current === 'happy_boost') boostName = 'Больше счастья';
+      if (success.current === 'feed_boost') boostName = 'Меньше голода';
+      await bot.sendMessage(chatId, formatMessage(TEXT.SHOP.ALREADY_BOOST(boostName)), { parse_mode: "MarkdownV2" });
+    } else {
+      await bot.sendMessage(chatId, formatMessage(TEXT.SHOP.NOT_ENOUGH), { parse_mode: "MarkdownV2" });
+    }
     return;
   }
 });

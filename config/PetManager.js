@@ -33,6 +33,12 @@ class PetManager {
 
     const adventure = ADVENTURES[Math.floor(Math.random() * ADVENTURES.length)];
 
+    // Проверяем наличие ускоряющего буста
+    let adventureInterval = INTERVALS.ADVENTURE;
+    if (bukashka.boost === 'adventure_boost') {
+      adventureInterval = Math.floor(INTERVALS.ADVENTURE / 1.5);
+    }
+
     // Обновляем данные в Firebase с временными метками
     await this.petsRef.child(chatId).update({
       isAdventuring: true,
@@ -43,11 +49,11 @@ class PetManager {
     // Устанавливаем таймер для завершения приключения
     this.adventureTimers[chatId] = setTimeout(() => {
       this.completeAdventure(chatId);
-    }, INTERVALS.ADVENTURE);
+    }, adventureInterval);
 
     await this.bot.sendMessage(
       chatId,
-      formatMessage(TEXT.ADVENTURE.START(bukashka.name, formatTimeLeft(INTERVALS.ADVENTURE / 1000))),
+      formatMessage(TEXT.ADVENTURE.START(bukashka.name, formatTimeLeft(Math.floor(adventureInterval / 1000)))),
       { parse_mode: "MarkdownV2" }
     );
   }
@@ -184,7 +190,12 @@ class PetManager {
     for (const [userId, bukashka] of Object.entries(pets)) {
       if (!bukashka) continue;
       if (bukashka.isAdventuring) continue;
-      const newFeed = Math.max(0, (bukashka.feed || 0) - VALUE.FEED_DECAY);
+      // Учитываем буст на меньше голода
+      let feedDecay = VALUE.FEED_DECAY;
+      if (bukashka.boost === 'feed_boost') {
+        feedDecay = feedDecay / 1.5;
+      }
+      const newFeed = Math.max(0, (bukashka.feed || 0) - feedDecay);
       const newHappy = Math.max(0, (bukashka.happy || 0) - VALUE.HAPPY_DECAY);
       await petsRef.child(userId).update({ feed: newFeed, happy: newHappy });
       if (newFeed < 10) {
@@ -213,6 +224,27 @@ class PetManager {
         await petManager.completeAdventure(userId);
       }
     }
+  }
+
+  // Установить boost для букашки с учетом стоимости
+  async setBoost(userId, boostType, price) {
+    const snapshot = await this.petsRef.child(userId).once('value');
+    const bukashka = snapshot.val();
+    if (!bukashka || (bukashka.coins || 0) < price) {
+      return false;
+    }
+    let replaced = null;
+    if (bukashka.boost) {
+      replaced = bukashka.boost;
+    }
+    await this.petsRef.child(userId).update({
+      boost: boostType,
+      coins: (bukashka.coins || 0) - price
+    });
+    if (replaced) {
+      return { replaced, newBoost: boostType };
+    }
+    return true;
   }
 }
 

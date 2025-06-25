@@ -162,10 +162,11 @@ const handleGameAction = async (bot, chatId, pet, petsRef, formatMessage, TEXT, 
         break;
       case 5:
         happyChange = 5;
+        coinsChange = Math.floor(Math.random() * 5) + 2;
         break;
       case 6:
         happyChange = 6;
-        coinsChange = 15;
+        coinsChange = Math.floor(Math.random() * 10) + 5;
         break;
     }
     msg = TEXT.GAME.DICE_RESULT(value, happyChange, coinsChange);
