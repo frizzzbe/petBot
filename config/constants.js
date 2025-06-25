@@ -18,7 +18,7 @@ const INTERVALS = {
   FEED: 3 * 1000, // кормление
   ADVENTURE: 60 * 1000, // приключения
   GAME: 60 * 1000, // игра
-  FEED_DECAY: 5 * 60 * 1000, // голодание
+  FEED_DECAY: 15 * 60 * 1000, // голодание
   FEED_BOOST_DURATION: 15 * 60 * 1000 // длительность буста на голодание (15 минут)
 };
 
@@ -133,10 +133,20 @@ const ADVENTURES = [
   }
 ];
 
+const STICKERS = {
+  RABBIT: [
+    'CAACAgIAAxkBAAEOyQFoXBZNWnOa5nbYR0dwpfM3aOO1IwACqXIAAhXz2Ukp0-p_2K-SsDYE', 
+    'CAACAgIAAxkBAAEOyQNoXBi0LYpPm9bTWqSy-oDEln98LwACR3IAAvh12UkchR4TkjidKjYE', 
+    'CAACAgIAAxkBAAEOyQVoXBi7QEdEGBeQO_F_poBpNro3XAACt3IAAqfb2EnMgR5Jj052YTYE', 
+    'CAACAgIAAxkBAAEOyQdoXBjNSgcXeXkD2z3m7hInsXAVrAACkm0AAjiN2EksurBJyQM_1jYE'
+  ]
+}
+
 module.exports = {
   COMMANDS,
   DEFAULT_BUKASHKA,
   ADVENTURES,
   INTERVALS,
-  VALUE
+  VALUE,
+  STICKERS
 };

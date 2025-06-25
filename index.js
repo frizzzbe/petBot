@@ -5,7 +5,7 @@ const admin = require("firebase-admin");
 const serviceAccount = require("./db-access.json");
 
 const PetManager = require('./config/PetManager');
-const { COMMANDS, DEFAULT_BUKASHKA, ADVENTURES, INTERVALS } = require('./config/constants');
+const { COMMANDS, DEFAULT_BUKASHKA, ADVENTURES, INTERVALS, STICKERS } = require('./config/constants');
 const { TEXT } = require('./config/text');
 const {
   getFeedResult,
@@ -38,7 +38,7 @@ PetManager.checkAndFinishAdventures(bot, petsRef);
 setInterval(async () => {
   await PetManager.batchFeedDecay(bot, petsRef);
   await PetManager.batchCompleteAdventures(bot, petsRef);
-}, 60 * 1000); // раз в минуту
+}, INTERVALS.FEED_DECAY); // раз в 15 минут
 
 // Устанавливаем меню команд
 bot.setMyCommands(COMMANDS);
@@ -272,7 +272,10 @@ bot.on("text", async (msg) => {
               [
                 { text: "Ускорение приключений", callback_data: "boost_adventure" },
                 { text: "Больше счастья", callback_data: "boost_happy" },
-                { text: "Меньше голода", callback_data: "boost_feed" }
+              ],
+              [
+                { text: "Меньше голода", callback_data: "boost_feed" },
+                { text: "Кролик", callback_data: "shop_rabbit" }
               ]
             ]
           },
@@ -382,6 +385,26 @@ bot.on('callback_query', async (query) => {
     } else {
       await bot.sendMessage(chatId, formatMessage(TEXT.SHOP.NOT_ENOUGH), { parse_mode: "MarkdownV2" });
     }
+    return;
+  } else if (query.data === "shop_rabbit") {
+    bot.answerCallbackQuery(query.id);
+    const bukashka = await petObject.getBukashka(chatId);
+    if (!bukashka) {
+      await petObject.emptyPetMsg(chatId);
+      return;
+    }
+    if ((bukashka.coins || 0) < 20) {
+      await bot.sendMessage(chatId, 'Недостаточно монет для покупки кролика!');
+      return;
+    }
+    const happyAdd = Math.floor(Math.random() * 8) + 8; // 8-15
+    const newHappy = Math.min(100, (bukashka.happy || 0) + happyAdd);
+    await petObject.petsRef.child(chatId).update({
+      coins: (bukashka.coins || 0) - 20,
+      happy: newHappy
+    });
+    await bot.sendSticker(chatId, STICKERS.RABBIT[Math.floor(Math.random() * STICKERS.RABBIT.length)])
+    await bot.sendMessage(chatId, `${TEXT.SHOP.RABBIT_SUCCESS}\n\nСчастье увеличилось: ${newHappy} (+${happyAdd}) 🥳`);
     return;
   }
 });
