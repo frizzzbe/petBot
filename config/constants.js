@@ -23,11 +23,27 @@ const INTERVALS = {
 };
 
 const VALUE = {
-  FEED_DECAY: 3, // голодание
+  FEED_DECAY: 1, // голодание
   HAPPY_DECAY: 5, // счастье
   ADVENTURE_DECAY: 2, // приключения
   GAME_DECAY: 1 // игра
 }
+
+const SHOP_PRICES = {
+  adventure_boost: 30,
+  happy_boost: 20,
+  feed_boost: 15,
+  rabbit: 20,
+  PRICE: 15,
+  WIN: {
+    happy: 10,
+    coins: 50
+  },
+  JACKPOT: {
+    happy: 30,
+    coins: 500
+  }
+};
 
 // Массив с возможными приключениями и их эффектами
 const ADVENTURES = [
@@ -148,5 +164,6 @@ module.exports = {
   ADVENTURES,
   INTERVALS,
   VALUE,
-  STICKERS
+  STICKERS,
+  SHOP_PRICES
 };

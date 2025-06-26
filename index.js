@@ -5,7 +5,7 @@ const admin = require("firebase-admin");
 const serviceAccount = require("./db-access.json");
 
 const PetManager = require('./config/PetManager');
-const { COMMANDS, DEFAULT_BUKASHKA, ADVENTURES, INTERVALS, STICKERS } = require('./config/constants');
+const { COMMANDS, DEFAULT_BUKASHKA, ADVENTURES, INTERVALS, STICKERS, SHOP_PRICES } = require('./config/constants');
 const { TEXT } = require('./config/text');
 const {
   getFeedResult,
@@ -53,8 +53,8 @@ bot.on("text", async (msg) => {
           keyboard: [
             ["⭐️ Взять букашку", "⭐️ Покормить"],
             ["⭐️ Моя букашка", "❓ Где букашка"],
-            ["🎲 Поиграть", "💀 Раздавить букашку"],
-            ["🎒 Букашку в приключение", "🏪 Магазин"],
+            ["🎒 Букашку в приключение", "🎲 Поиграть"],
+            ["🏪 Магазин", "💀 Раздавить букашку"],
           ],
           resize_keyboard: true,
         },
@@ -276,26 +276,39 @@ bot.on("text", async (msg) => {
               [
                 { text: "Меньше голода", callback_data: "boost_feed" },
                 { text: "Кролик", callback_data: "shop_rabbit" }
+              ],
+              [
+                { text: "Казик 🎰", callback_data: "casino" }
               ]
             ]
           },
           parse_mode: "MarkdownV2"
         }
       );
-    } else {
-      //Отправляем пользователю сообщение
-      const msgWait = await bot.sendMessage(
-        msg.chat.id,
-        `Бот генерирует ответ...`
-      );
-
-      //Через 2 секунды редактируем сообщение о генерации и вставляем туда сообщение пользователя (эхо-бот)
-      setTimeout(async () => {
-        await bot.editMessageText(msg.text, {
-          chat_id: msgWait.chat.id,
-          message_id: msgWait.message_id,
-        });
-      }, 2000);
+    } else if (userRequest === "рейтинг") {
+      // Получаем всех букашек из базы
+      const snapshot = await petsRef.once('value');
+      const pets = snapshot.val();
+      if (!pets) {
+        await bot.sendMessage(msg.chat.id, 'Нет ни одной букашки в рейтинге.');
+        return;
+      }
+      // Преобразуем в массив и сортируем по уровню (level)
+      const petList = Object.values(pets)
+        .map(b => ({ name: b.name, level: b.level || 0 }))
+        .sort((a, b) => (b.level || 0) - (a.level || 0))
+        .slice(0, 20);
+      if (petList.length === 0) {
+        await bot.sendMessage(msg.chat.id, 'Нет ни одной букашки в рейтинге.');
+        return;
+      }
+      // Формируем текст рейтинга
+      const ratingText = petList.map((b, i) => {
+        const lvl = Math.floor(b.level / 100);
+        const rest = b.level % 100;
+        return `${i + 1}. ${b.name} - Уровень ${lvl} (${rest}/100)`;
+      }).join('\n');
+      await bot.sendMessage(msg.chat.id, `🔝 Топ букашек во всём мире:\n${ratingText}`);
     }
   } catch (error) {
     console.error(error);
@@ -355,9 +368,9 @@ bot.on('callback_query', async (query) => {
     let boostType = null;
     let price = 0;
     let boostText = '';
-    if (query.data === "boost_adventure") { boostType = "adventure_boost"; price = 30; boostText = 'Ускорение приключений'; }
-    if (query.data === "boost_happy") { boostType = "happy_boost"; price = 20; boostText = 'Больше счастья'; }
-    if (query.data === "boost_feed") { boostType = "feed_boost"; price = 15; boostText = 'Меньше голода'; }
+    if (query.data === "boost_adventure") { boostType = "adventure_boost"; price = SHOP_PRICES.adventure_boost; boostText = 'Ускорение приключений'; }
+    if (query.data === "boost_happy") { boostType = "happy_boost"; price = SHOP_PRICES.happy_boost; boostText = 'Больше счастья'; }
+    if (query.data === "boost_feed") { boostType = "feed_boost"; price = SHOP_PRICES.feed_boost; boostText = 'Меньше голода'; }
     // Проверка: нельзя купить тот же буст повторно
     if (bukashka && bukashka.isAdventuring) {
       await bot.sendMessage(chatId, 'Нельзя покупать бусты, пока букашка находится в приключении!');
@@ -369,13 +382,13 @@ bot.on('callback_query', async (query) => {
     }
     const success = await petObject.setBoost(chatId, boostType, price);
     if (success === true) {
-      await bot.sendMessage(chatId, formatMessage(TEXT.SHOP.SUCCESS(boostText, price)), { parse_mode: "MarkdownV2" });
+      await bot.sendMessage(chatId, formatMessage(TEXT.SHOP.SUCCESS(boostText, price) + '\n\n' + TEXT.SHOP.BOOST_INFO(boostType)), { parse_mode: "MarkdownV2" });
     } else if (success && success.replaced) {
       let oldBoostName = '';
       if (success.replaced === 'adventure_boost') oldBoostName = 'Ускорение приключений';
       if (success.replaced === 'happy_boost') oldBoostName = 'Больше счастья';
       if (success.replaced === 'feed_boost') oldBoostName = 'Меньше голода';
-      await bot.sendMessage(chatId, formatMessage(TEXT.SHOP.REPLACED_BOOST(oldBoostName, boostText, price)), { parse_mode: "MarkdownV2" });
+      await bot.sendMessage(chatId, formatMessage(TEXT.SHOP.REPLACED_BOOST(oldBoostName, boostText, price) + '\n\n' + TEXT.SHOP.BOOST_INFO(boostType)), { parse_mode: "MarkdownV2" });
     } else if (success && success.already) {
       let boostName = '';
       if (success.current === 'adventure_boost') boostName = 'Ускорение приключений';
@@ -393,18 +406,51 @@ bot.on('callback_query', async (query) => {
       await petObject.emptyPetMsg(chatId);
       return;
     }
-    if ((bukashka.coins || 0) < 20) {
+    if ((bukashka.coins || 0) < SHOP_PRICES.rabbit) {
       await bot.sendMessage(chatId, 'Недостаточно монет для покупки кролика!');
       return;
     }
     const happyAdd = Math.floor(Math.random() * 8) + 8; // 8-15
     const newHappy = Math.min(100, (bukashka.happy || 0) + happyAdd);
     await petObject.petsRef.child(chatId).update({
-      coins: (bukashka.coins || 0) - 20,
+      coins: (bukashka.coins || 0) - SHOP_PRICES.rabbit,
       happy: newHappy
     });
     await bot.sendSticker(chatId, STICKERS.RABBIT[Math.floor(Math.random() * STICKERS.RABBIT.length)])
-    await bot.sendMessage(chatId, `${TEXT.SHOP.RABBIT_SUCCESS}\n\nСчастье увеличилось: ${newHappy} (+${happyAdd}) 🥳`);
+    await bot.sendMessage(chatId, `${TEXT.SHOP.RABBIT_SUCCESS}\n\nСчастье увеличилось: ${newHappy} (+${happyAdd})`);
+    return;
+  } else if (query.data === "casino") {
+    bot.answerCallbackQuery(query.id);
+    if ((bukashka.coins || 0) < SHOP_PRICES.PRICE) {
+      await bot.sendMessage(chatId, TEXT.CASINO.NOT_ENOUGH(SHOP_PRICES.PRICE));
+      return;
+    }
+    await petObject.petsRef.child(chatId).update({ coins: bukashka.coins - SHOP_PRICES.PRICE });
+    const { dice } = await bot.sendDice(chatId, { emoji: "🎰" });
+    setTimeout(async () => {
+      if (dice.value === 64) {
+        const updatedSnapshot = await petObject.petsRef.child(chatId).once('value');
+        const updatedBukashka = updatedSnapshot.val();
+        await petObject.petsRef.child(chatId).update({
+          coins: updatedBukashka.coins + SHOP_PRICES.JACKPOT.coins,
+          happy: Math.min(100, updatedBukashka.happy + SHOP_PRICES.JACKPOT.happy)
+        });
+        await bot.sendMessage(chatId, TEXT.CASINO.JACKPOT(SHOP_PRICES.JACKPOT));
+      } else if ([1, 22, 43].includes(dice.value)) {
+        // 1 === "bar bar bar"
+        // 22 === "berry berry berry"
+        // 43 === "lemon lemon lemon"
+        const updatedSnapshot = await petObject.petsRef.child(chatId).once('value');
+        const updatedBukashka = updatedSnapshot.val();
+        await petObject.petsRef.child(chatId).update({
+          coins: updatedBukashka.coins + SHOP_PRICES.WIN.coins,
+          happy: Math.min(100, updatedBukashka.happy + SHOP_PRICES.WIN.happy)
+        });
+        await bot.sendMessage(chatId, TEXT.CASINO.WIN(SHOP_PRICES.WIN));
+      } else {
+        await bot.sendMessage(chatId, TEXT.CASINO.LOSE);
+      }
+    }, 2000);
     return;
   }
 });

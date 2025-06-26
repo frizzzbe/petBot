@@ -234,13 +234,26 @@ class PetManager {
       } else if (bukashka.feedBoostUntil) {
         await petsRef.child(userId).update({ feedBoostUntil: null });
       }
-      const newFeed = Math.max(0, (bukashka.feed || 0) - feedDecay);
+      const oldFeed = bukashka.feed || 0;
+      const newFeed = Math.max(0, oldFeed - feedDecay);
       const newHappy = Math.max(0, (bukashka.happy || 0) - VALUE.HAPPY_DECAY);
       await petsRef.child(userId).update({ feed: newFeed, happy: newHappy });
-      if (newFeed < 10) {
+      
+      // предупреждения о голоде
+      const thresholds = [10, 5, 1];
+      let lastFeedWarning = bukashka.lastFeedWarning ?? 100;
+      const crossed = thresholds.find(threshold =>
+        oldFeed > threshold && newFeed <= threshold && threshold < lastFeedWarning
+      );
+      if (crossed !== undefined) {
         await bot.sendMessage(userId, formatMessage(TEXT.FEED.HUNGRY(bukashka.name, newFeed)), {
           parse_mode: "MarkdownV2",
         });
+        await petsRef.child(userId).update({ lastFeedWarning: crossed });
+      }
+      // Если сытость поднялась выше текущего порога — сбрасываем предупреждение
+      if (newFeed > lastFeedWarning) {
+        await petsRef.child(userId).update({ lastFeedWarning: 100 });
       }
       if (newFeed <= 0) {
         const petManager = new PetManager(bot);

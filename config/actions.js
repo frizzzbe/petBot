@@ -7,10 +7,10 @@ const formatBukashkaInfo = (bukashka, feedChange = 0, happinessChange = 0) => {
   const feedDisplay = feedChange
     ? `${bukashka.feed} (${feedChange > 0 ? '+' : ''}${feedChange})`
     : bukashka.feed;
-
   const happinessDisplay = happinessChange
     ? `${bukashka.happy} (${happinessChange > 0 ? '+' : ''}${happinessChange})`
     : bukashka.happy;
+  const happyEmoji = (bukashka.happy || 0) >= 40 ? '😊' : '😢';
 
   // Вычисляем возраст букашки в секундах
   const now = new Date();
@@ -30,7 +30,15 @@ const formatBukashkaInfo = (bukashka, feedChange = 0, happinessChange = 0) => {
   // Формат уровня
   const lvl = Math.floor((bukashka.level || 0) / 100);
   const lvlRest = (bukashka.level || 0) % 100;
-  const levelDisplay = `${lvl} уровень (${lvlRest}/100)`;
+  const levelDisplay = `${lvl} уровень ${lvlRest}/100`;
+
+  // Информация о счастье и опыте
+  let happyExpInfo = '';
+  if ((bukashka.happy || 0) < 40) {
+    happyExpInfo = '\nБукашка грустит и будет получать меньше опыта за приключения!';
+  } else if ((bukashka.happy || 0) > 70) {
+    happyExpInfo = '\nБукашка очень счастлива и будет получать больше опыта за приключения!';
+  }
 
   return formatMessage(`
 ✨ Информация о вашей букашке! 🐛
@@ -39,9 +47,9 @@ const formatBukashkaInfo = (bukashka, feedChange = 0, happinessChange = 0) => {
 *Возраст:* ${formatTimeLeft(ageInSeconds)}
 *Уровень:* ${levelDisplay}
 *Сытость:* ${feedDisplay} 🌱
-*Счастье:* ${happinessDisplay} 😊
+*Счастье:* ${happinessDisplay} ${happyEmoji}
 *Монетки:* ${bukashka.coins || 0} 🪙
-*Статус:* ${bukashka.isAdventuring ? 'В приключении! 🧭' : 'Дома 🏡'}${boostInfo}
+*Статус:* ${bukashka.isAdventuring ? 'В приключении! 🧭' : 'Дома 🏡'}${boostInfo}${happyExpInfo}
 
 ${feedChange || happinessChange
       ? TEXT.FEED.THANKS
@@ -176,11 +184,11 @@ const handleGameAction = async (bot, chatId, pet, petsRef, formatMessage, TEXT, 
         happyChange = 3;
         break;
       case 5:
-        happyChange = 5;
+        happyChange = 7;
         coinsChange = Math.floor(Math.random() * 5) + 2;
         break;
       case 6:
-        happyChange = 6;
+        happyChange = 10;
         coinsChange = Math.floor(Math.random() * 10) + 5;
         break;
     }
