@@ -139,8 +139,7 @@ const getFeedResult = (bukashkaName) => {
 
 // Функция для нормализации текста команды
 const normalizeCommand = (text) => {
-  // Удаляем все символы, кроме букв, цифр и пробелов, и приводим к нижнему регистру
-  return text.toLowerCase().replace(/[^а-яёa-z0-9\s]/gi, '').trim();
+  return text.toLowerCase().replace(/[^а-яёa-z0-9\/\s]/gi, '').trim();
 };
 
 // Универсальная функция проверки интервала

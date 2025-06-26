@@ -47,24 +47,41 @@ bot.on("text", async (msg) => {
   try {
     const userRequest = normalizeCommand(msg.text);
 
-    if (msg.text === "/start") {
+    if (["/start", "/start@bukashki_pet_bot"].includes(msg.text)) {
       await bot.sendMessage(msg.chat.id, formatMessage(TEXT.START.WELCOME), {
-        reply_markup: {
-          keyboard: [
-            ["⭐️ Взять букашку", "⭐️ Покормить"],
-            ["⭐️ Моя букашка", "❓ Где букашка"],
-            ["🎒 Букашку в приключение", "🎲 Поиграть"],
-            ["🏪 Магазин", "💀 Раздавить букашку"],
-          ],
-          resize_keyboard: true,
-        },
         parse_mode: "MarkdownV2"
       });
-    } else if (msg.text === "/help") {
+    } else if (["/menu", "/menu@bukashki_pet_bot"].includes(msg.text)) {
+      // Удаляем команду пользователя
+      await bot.deleteMessage(msg.chat.id, msg.message_id);
+      const sent = await bot.sendMessage(msg.chat.id, "Вы открыли /menu", {
+        reply_markup: {
+          keyboard: [
+            ["⭐️ Покормить", "⭐️ Моя букашка"],
+            ["❓ Где букашка", "🎒 Букашку в приключение"],
+            ["🎲 Поиграть", "🏪 Магазин"],
+            ["💀 Раздавить букашку", "Закрыть меню"]
+          ],
+          resize_keyboard: true,
+        }
+      });
+      return;
+    } else if (msg.text === "Закрыть меню") {
+      // Удаляем команду пользователя
+      await bot.deleteMessage(msg.chat.id, msg.message_id);
+      const sent = await bot.sendMessage(msg.chat.id, "Вы закрыли меню", {
+        reply_markup: {
+          remove_keyboard: true
+        }
+      });
+        bot.deleteMessage(msg.chat.id, sent.message_id).catch(() => {});
+
+      return;
+    } else if (["/help", "/help@bukashki_pet_bot"].includes(msg.text)) {
       await bot.sendMessage(msg.chat.id, formatMessage(TEXT.HELP), {
         parse_mode: "MarkdownV2"
       });
-    } else if (userRequest === "взять букашку") {
+    } else if (userRequest === "взять букашку" || ["/take@bukashki_pet_bot", "/take"].includes(msg.text)) {
       const userId = msg.from.id;
       const pet = await petObject.getBukashka(userId);
       if (pet) {
@@ -183,8 +200,8 @@ bot.on("text", async (msg) => {
         return;
       }
 
-      if (bukashka.isInAdventure) {
-        const timeLeft = petObject.getAdventureTimeLeft(userId);
+      if (bukashka.isAdventuring) {
+        const timeLeft = await petObject.getAdventureTimeLeft(userId);
         await bot.sendMessage(
           msg.chat.id,
           formatMessage(TEXT.ADVENTURE.IN_PROGRESS(bukashka.name, formatTimeLeft(timeLeft))),
@@ -214,7 +231,7 @@ bot.on("text", async (msg) => {
         return;
       }
 
-      await petObject.startAdventure(msg.chat.id, ADVENTURES);
+      await petObject.startAdventure(userId, msg.chat.id, ADVENTURES);
     } else if (userRequest === "где букашка") {
       const userId = msg.from.id;
       const bukashka = await petObject.getBukashka(userId);
@@ -265,7 +282,7 @@ bot.on("text", async (msg) => {
       }
       await bot.sendMessage(
         msg.chat.id,
-        formatMessage(TEXT.SHOP.WELCOME) + `\n\n${boostInfo}`,
+        formatMessage(TEXT.SHOP.WELCOME()) + `\n\n${boostInfo}`,
         {
           reply_markup: {
             inline_keyboard: [
@@ -335,7 +352,8 @@ bot.on("photo", async (msg) => {
 // Добавляем обработчик для кнопок
 bot.on('callback_query', async (query) => {
   const chatId = query.message.chat.id;
-  const bukashka = await petObject.getBukashka(chatId);
+  const userId = query.from.id;
+  const bukashka = await petObject.getBukashka(userId);
 
   if (!bukashka) {
     bot.answerCallbackQuery(query.id, { text: TEXT.STATUS.NO_BUKASHKA });
@@ -344,7 +362,8 @@ bot.on('callback_query', async (query) => {
 
   if (query.data === "adventure_risk") {
     bot.answerCallbackQuery(query.id);
-    await petObject.startAdventure(chatId, ADVENTURES);
+    await petObject.startAdventure(userId, chatId, ADVENTURES);
+    return;
   } else if (query.data === "adventure_cancel") {
     bot.answerCallbackQuery(query.id);
     bot.deleteMessage(chatId, query.message.message_id);

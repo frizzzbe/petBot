@@ -2,6 +2,8 @@
 const COMMANDS = [
   { command: "start", description: "Запуск бота" },
   { command: "help", description: "Раздел помощи" },
+  { command: "menu", description: "Меню команд" },
+  { command: "take", description: "Взять букашку" },
 ];
 
 const DEFAULT_BUKASHKA = {
@@ -30,14 +32,14 @@ const VALUE = {
 }
 
 const SHOP_PRICES = {
-  adventure_boost: 30,
-  happy_boost: 20,
-  feed_boost: 15,
-  rabbit: 20,
-  PRICE: 15,
+  adventure_boost: 100,
+  happy_boost: 80,
+  feed_boost: 65,
+  rabbit: 50,
+  PRICE: 20,
   WIN: {
     happy: 10,
-    coins: 50
+    coins: 80
   },
   JACKPOT: {
     happy: 30,
