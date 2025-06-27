@@ -1,5 +1,5 @@
 const { TEXT } = require('./text');
-const { formatTimeLeft, escapeMarkdown, formatMessage } = require('../utils/helpers');
+const { formatTimeLeft, escapeMarkdown, formatMessage, getBukashkaLevel } = require('../utils/helpers');
 const admin = require('firebase-admin');
 
 // Функция для форматирования информации о букашке
@@ -28,7 +28,7 @@ const formatBukashkaInfo = (bukashka, feedChange = 0, happinessChange = 0) => {
   }
 
   // Формат уровня
-  const lvl = Math.floor((bukashka.level || 0) / 100);
+  const lvl = getBukashkaLevel(bukashka.level);
   const lvlRest = (bukashka.level || 0) % 100;
   const levelDisplay = `${lvl} уровень ${lvlRest}/100`;
 
@@ -59,15 +59,15 @@ ${feedChange || happinessChange
 };
 
 // Функция для отправки информации о букашке
-const sendBukashkaInfo = async (chatId, bukashka, feedChange = 0, happinessChange = 0, bot) => {
+const sendBukashkaInfo = async (chatId, userId, feedChange = 0, happinessChange = 0, bot) => {
   // Получаем актуальные данные из Firebase
   const petsRef = admin.database().ref('pets');
-  const snapshot = await petsRef.child(chatId).once('value');
-  const currentBukashka = snapshot.val() || bukashka;
+  const snapshot = await petsRef.child(userId).once('value');
+  const currentBukashka = snapshot.val();
 
   const message = formatBukashkaInfo(currentBukashka, feedChange, happinessChange);
 
-  if (currentBukashka.image) {
+  if (currentBukashka && currentBukashka.image) {
     // Если есть фото букашки, отправляем его с информацией
     await bot.sendPhoto(chatId, currentBukashka.image, {
       caption: message,
@@ -165,7 +165,7 @@ const checkInterval = async (lastTime, interval, actionName, chatId, bot) => {
 };
 
 // Универсальный обработчик для мини-игр (dice, bowling)
-const handleGameAction = async (bot, chatId, pet, petsRef, formatMessage, TEXT, gameType, value) => {
+const handleGameAction = async ({ bot, chatId, userId, pet, petsRef, TEXT, value }) => {
   let happyChange = 0;
   let coinsChange = 0;
   let msg = '';
@@ -195,7 +195,7 @@ const handleGameAction = async (bot, chatId, pet, petsRef, formatMessage, TEXT, 
   if (pet) {
     const newHappy = Math.max(0, Math.min(100, (pet.happy || 0) + happyChange));
     const newCoins = (pet.coins || 0) + coinsChange;
-    await petsRef.child(pet.userId || chatId).update({
+    await petsRef.child(userId).update({
       happy: newHappy,
       coins: newCoins
     });

@@ -16,12 +16,12 @@ class PetManager {
     const snapshot = await this.petsRef.child(userId).once('value');
     const bukashka = snapshot.val();
 
-    if (!bukashka || !bukashka.isAdventuring || !bukashka.adventureStartTime) {
+    if (!bukashka || !bukashka.isAdventuring || !bukashka.state || !bukashka.state.adventureStartTime) {
       return 0;
     }
 
     const now = Date.now();
-    const startTime = new Date(bukashka.adventureStartTime).getTime();
+    const startTime = new Date(bukashka.state.adventureStartTime).getTime();
     const elapsed = Math.floor((now - startTime) / 1000);
     return Math.max(0, Math.floor(INTERVALS.ADVENTURE / 1000) - elapsed);
   }
@@ -30,6 +30,8 @@ class PetManager {
     const snapshot = await this.petsRef.child(userId).once('value');
     const bukashka = snapshot.val();
     if (!bukashka) return;
+
+    await this.petsRef.child(userId).update({ state: {...bukashka.state, lastChatId: chatId} });
 
     const adventure = ADVENTURES[Math.floor(Math.random() * ADVENTURES.length)];
 
@@ -42,10 +44,12 @@ class PetManager {
     }
 
     // Обновляем данные в Firebase с временными метками
+    const state = bukashka.state || {};
+    state.adventureStartTime = new Date().toISOString();
     await this.petsRef.child(userId).update({
       isAdventuring: true,
       adventureResult: adventure,
-      adventureStartTime: new Date().toISOString()
+      state
     });
 
     // Устанавливаем таймер для завершения приключения
@@ -104,7 +108,7 @@ class PetManager {
       happy: newHappy,
       isAdventuring: false,
       adventureResult: null,
-      adventureStartTime: null,
+      state: { ...(bukashka.state || {}), adventureStartTime: null },
       coins: newCoins,
       level: newLevel
     };
@@ -143,7 +147,8 @@ class PetManager {
     const bukashka = snapshot.val();
 
     if (bukashka) {
-      const ageSeconds = Math.floor((Date.now() - new Date(bukashka.creationDate)) / 1000);
+      const creation = new Date(bukashka.creationDate);
+      const ageSeconds = isNaN(creation) ? 0 : Math.floor((Date.now() - creation) / 1000);
 
       // Удаляем данные из Firebase
       await this.petsRef.child(userId).remove();
@@ -158,9 +163,16 @@ class PetManager {
     const bukashkaData = {
       name,
       creationDate: new Date().toISOString(),
-      lastFeedTime: "",
-      adventureStartTime: null,
       coins: 0,
+      state: {
+        lastChatId: chatId,
+        lastFeedDecayTime: null,
+        lastFeedTime: null,
+        lastFeedWarning: 100,
+        lastGameTime: null,
+        adventureStartTime: null,
+        feedBoostUntil: null
+      },
       ...DEFAULT_BUKASHKA
     };
 
@@ -185,14 +197,14 @@ class PetManager {
   async getLastFeedTime(userId) {
     const snapshot = await this.petsRef.child(userId).once('value');
     const bukashka = snapshot.val();
-    return bukashka && bukashka.lastFeedTime ? new Date(bukashka.lastFeedTime).getTime() : 0;
+    return bukashka && bukashka.state && bukashka.state.lastFeedTime ? new Date(bukashka.state.lastFeedTime).getTime() : 0;
   }
 
   // Метод для обновления времени последнего кормления в базе данных
   async updateLastFeedTime(userId, timestamp) {
-    await this.petsRef.child(userId).update({
-      lastFeedTime: timestamp
-    });
+    const snapshot = await this.petsRef.child(userId).once('value');
+    const bukashka = snapshot.val();
+    await this.petsRef.child(userId).update({ state: {...bukashka.state, lastFeedTime: timestamp} });
   }
 
   // Установить фотографию для букашки
@@ -206,12 +218,17 @@ class PetManager {
   async getLastGameTime(userId) {
     const snapshot = await this.petsRef.child(userId).once('value');
     const bukashka = snapshot.val();
-    return bukashka && bukashka.lastGameTime ? new Date(bukashka.lastGameTime).getTime() : 0;
+    return bukashka && bukashka.state && bukashka.state.lastGameTime ? new Date(bukashka.state.lastGameTime).getTime() : 0;
   }
 
   // Обновить время последней игры
   async updateLastGameTime(userId, timestamp) {
-    await this.petsRef.child(userId).update({ lastGameTime: timestamp });
+    // userId — всегда id владельца букашки, а не chatId!
+    const snapshot = await this.petsRef.child(userId).once('value');
+    const bukashka = snapshot.val();
+    const state = bukashka?.state || {};
+    state.lastGameTime = timestamp;
+    await this.petsRef.child(userId).update({ state });
   }
 
   // уменьшение сытости и счастья у всех букашек
@@ -219,6 +236,7 @@ class PetManager {
     const snapshot = await petsRef.once('value');
     const pets = snapshot.val();
     if (!pets) return;
+    const now = Date.now();
     for (const [userId, bukashka] of Object.entries(pets)) {
       if (!bukashka) continue;
       if (bukashka.isAdventuring) continue;
@@ -226,22 +244,34 @@ class PetManager {
 
       // Проверяем срок действия feed_boost
       if (bukashka.boost === 'feed_boost') {
-        if (!bukashka.feedBoostUntil || Date.now() > new Date(bukashka.feedBoostUntil).getTime()) {
-          await petsRef.child(userId).update({ boost: null, feedBoostUntil: null });
+        const state = bukashka.state || {};
+        if (!state.feedBoostUntil || now > new Date(state.feedBoostUntil).getTime()) {
+          state.feedBoostUntil = null;
+          await petsRef.child(userId).update({ boost: null, state });
         } else {
           feedDecay = feedDecay / 1.5;
         }
-      } else if (bukashka.feedBoostUntil) {
-        await petsRef.child(userId).update({ feedBoostUntil: null });
+      } else if (bukashka.state && bukashka.state.feedBoostUntil) {
+        const state = bukashka.state || {};
+        state.feedBoostUntil = null;
+        await petsRef.child(userId).update({ state });
       }
+
+      // --- пропорциональное уменьшение сытости ---
+      const lastDecay = bukashka.state && bukashka.state.lastFeedDecayTime ? new Date(bukashka.state.lastFeedDecayTime).getTime() : now;
+      const intervalsMissed = Math.floor((now - lastDecay) / INTERVALS.FEED_DECAY) || 1;
+      const totalFeedDecay = feedDecay * intervalsMissed;
       const oldFeed = bukashka.feed || 0;
-      const newFeed = Math.max(0, oldFeed - feedDecay);
-      const newHappy = Math.max(0, (bukashka.happy || 0) - VALUE.HAPPY_DECAY);
-      await petsRef.child(userId).update({ feed: newFeed, happy: newHappy });
+      const newFeed = Math.max(0, oldFeed - totalFeedDecay);
+      const newHappy = Math.max(0, (bukashka.happy || 0) - VALUE.HAPPY_DECAY * intervalsMissed);
+
+      const state = bukashka.state || {}
+      state.lastFeedDecayTime = new Date(now).toISOString();
+      await petsRef.child(userId).update({ feed: newFeed, happy: newHappy, state });
       
       // предупреждения о голоде
       const thresholds = [10, 5, 1];
-      let lastFeedWarning = bukashka.lastFeedWarning ?? 100;
+      let lastFeedWarning = state.lastFeedWarning !== undefined ? state.lastFeedWarning : 100;
       const crossed = thresholds.find(threshold =>
         oldFeed > threshold && newFeed <= threshold && threshold < lastFeedWarning
       );
@@ -249,11 +279,13 @@ class PetManager {
         await bot.sendMessage(userId, formatMessage(TEXT.FEED.HUNGRY(bukashka.name, newFeed)), {
           parse_mode: "MarkdownV2",
         });
-        await petsRef.child(userId).update({ lastFeedWarning: crossed });
+        state.lastFeedWarning = crossed;
+        await petsRef.child(userId).update({ state });
       }
       // Если сытость поднялась выше текущего порога — сбрасываем предупреждение
       if (newFeed > lastFeedWarning) {
-        await petsRef.child(userId).update({ lastFeedWarning: 100 });
+        state.lastFeedWarning = 100;
+        await petsRef.child(userId).update({ state });
       }
       if (newFeed <= 0) {
         const petManager = new PetManager(bot);
@@ -269,11 +301,12 @@ class PetManager {
     if (!pets) return;
     const now = Date.now();
     for (const [userId, bukashka] of Object.entries(pets)) {
-      if (!bukashka || !bukashka.isAdventuring || !bukashka.adventureStartTime) continue;
-      const elapsed = Math.floor((now - bukashka.adventureStartTime) / 1000);
+      if (!bukashka || !bukashka.isAdventuring || !bukashka.state || !bukashka.state.adventureStartTime) continue;
+      const elapsed = Math.floor((now - new Date(bukashka.state.adventureStartTime).getTime()) / 1000);
       if (elapsed >= INTERVALS.ADVENTURE / 1000) {
         const petManager = new PetManager(bot);
-        await petManager.completeAdventure(userId, userId);
+        const chatId = bukashka.state && bukashka.state.lastChatId ? bukashka.state.lastChatId : userId;
+        await petManager.completeAdventure(userId, chatId);
       }
     }
   }
@@ -282,6 +315,7 @@ class PetManager {
   async setBoost(userId, boostType, price) {
     const snapshot = await this.petsRef.child(userId).once('value');
     const bukashka = snapshot.val();
+    const state = bukashka.state || {};
     if (!bukashka || (bukashka.coins || 0) < price) {
       return false;
     }
@@ -295,10 +329,11 @@ class PetManager {
       coins: (bukashka.coins || 0) - price
     };
     if (boostType === 'feed_boost') {
-      updateData.feedBoostUntil = new Date(Date.now() + INTERVALS.FEED_BOOST_DURATION).toISOString();
+      state.feedBoostUntil = new Date(Date.now() + INTERVALS.FEED_BOOST_DURATION).toISOString();
     } else {
-      updateData.feedBoostUntil = null;
+      state.feedBoostUntil = null;
     }
+    updateData.state = state;
     await this.petsRef.child(userId).update(updateData);
     if (replaced) {
       return { replaced, newBoost: boostType };
@@ -313,21 +348,22 @@ class PetManager {
     if (!pets) return;
     const now = Date.now();
     for (const [userId, bukashka] of Object.entries(pets)) {
-      if (!bukashka || !bukashka.isAdventuring || !bukashka.adventureStartTime) continue;
+      if (!bukashka || !bukashka.isAdventuring || !bukashka.state || !bukashka.state.adventureStartTime) continue;
       let adventureInterval = require('./constants').INTERVALS.ADVENTURE;
       if (bukashka.boost === 'adventure_boost') {
         adventureInterval = Math.floor(adventureInterval / 1.5);
       }
-      const startTime = new Date(bukashka.adventureStartTime).getTime();
+      const startTime = new Date(bukashka.state.adventureStartTime).getTime();
       const left = (startTime + adventureInterval) - now;
       const petManager = new PetManager(bot);
+      const chatId = bukashka.state && bukashka.state.lastChatId ? bukashka.state.lastChatId : userId;
       if (left <= 0) {
-        await petManager.completeAdventure(userId, userId);
+        await petManager.completeAdventure(userId, chatId);
       } else {
         // Восстанавливаем таймер на остаток времени
         if (!petManager.adventureTimers) petManager.adventureTimers = {};
         petManager.adventureTimers[userId] = setTimeout(() => {
-          petManager.completeAdventure(userId, userId);
+          petManager.completeAdventure(userId, chatId);
         }, left);
       }
     }

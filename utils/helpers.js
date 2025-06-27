@@ -37,8 +37,14 @@ const formatMessage = (text) => {
   return result;
 };
 
+// Функция для вычисления уровня букашки по очкам
+const getBukashkaLevel = (levelPoints) => {
+  return Math.floor((levelPoints || 0) / 100) + 1;
+};
+
 module.exports = {
   formatTimeLeft,
   escapeMarkdown,
-  formatMessage
+  formatMessage,
+  getBukashkaLevel
 };

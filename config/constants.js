@@ -25,8 +25,8 @@ const INTERVALS = {
 };
 
 const VALUE = {
-  FEED_DECAY: 1, // голодание
-  HAPPY_DECAY: 5, // счастье
+  FEED_DECAY: 3, // голодание
+  HAPPY_DECAY: 3, // счастье
   ADVENTURE_DECAY: 2, // приключения
   GAME_DECAY: 1 // игра
 }
