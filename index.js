@@ -280,9 +280,14 @@ bot.on("text", async (msg) => {
         if (bukashka.boost === 'feed_boost') boostName = 'Меньше голода';
         boostInfo = formatMessage(TEXT.SHOP.ACTIVE_INFO(boostName)) + '\n\n';
       }
+      // Добавляем строку с балансом монет
+      let coinsInfo = '';
+      if (bukashka) {
+        coinsInfo = `\nВаш баланс: ${bukashka.coins || 0} монет 🪙`;
+      }
       await bot.sendMessage(
         msg.chat.id,
-        formatMessage(TEXT.SHOP.WELCOME()) + `\n\n${boostInfo}`,
+        formatMessage(TEXT.SHOP.WELCOME()) + `\n${coinsInfo}\n\n${boostInfo}`,
         {
           reply_markup: {
             inline_keyboard: [
