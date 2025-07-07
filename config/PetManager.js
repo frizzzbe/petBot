@@ -207,10 +207,10 @@ class PetManager {
     await this.petsRef.child(userId).update({ state: {...bukashka.state, lastFeedTime: timestamp} });
   }
 
-  // Установить фотографию для букашки
-  async updloadPetImage(userId, image) {
+  // Установить фотографию или gif для букашки
+  async updloadPetImage(userId, imageObj) {
     await this.petsRef.child(userId).update({
-      image: image
+      image: imageObj
     });
   }
 

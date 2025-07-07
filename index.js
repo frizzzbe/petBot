@@ -32,6 +32,9 @@ const petObject = new PetManager(bot);
 const db = admin.database();
 const petsRef = db.ref('pets');
 
+// Добавляем объект для отслеживания ожидания фото
+const waitingForPhoto = {};
+
 // Проверка и завершение просроченных приключений при запуске
 PetManager.checkAndFinishAdventures(bot, petsRef);
 
@@ -81,6 +84,15 @@ bot.on("text", async (msg) => {
       await bot.sendMessage(msg.chat.id, formatMessage(TEXT.HELP), {
         parse_mode: "MarkdownV2"
       });
+    } else if (["/img", "/img@bukashki_pet_bot"].includes(msg.text)) {
+      const userId = msg.from.id;
+      const bukashka = await petObject.getBukashka(userId);
+      if (!bukashka) {
+        await petObject.emptyPetMsg(msg.chat.id);
+        return;
+      }
+      waitingForPhoto[userId] = true;
+      await bot.sendMessage(msg.chat.id, "Отправьте фотографию для профиля вашей букашки.");
     } else if (userRequest === "взять букашку" || ["/take@bukashki_pet_bot", "/take"].includes(msg.text)) {
       const userId = msg.from.id;
       const pet = await petObject.getBukashka(userId);
@@ -337,21 +349,41 @@ bot.on("text", async (msg) => {
   }
 });
 
-bot.on("photo", async (msg) => {
+// Универсальный обработчик для фото и gif-анимаций
+async function handlePetMedia(msg, type) {
   try {
     const userId = msg.from.id;
-    const photo = msg.photo[msg.photo.length - 1];
-    const bukashka = await petObject.getBukashka(userId);
-
-    if (bukashka) {
-      await petObject.updloadPetImage(userId, photo.file_id);
-      await sendBukashkaInfo(msg.chat.id, userId, 0, 0, bot);
+    let file_id;
+    if (type === 'photo' && msg.photo) {
+      file_id = msg.photo[msg.photo.length - 1].file_id;
+    } else if (type === 'gif' && msg.animation) {
+      file_id = msg.animation.file_id;
     } else {
+      return;
+    }
+    const bukashka = await petObject.getBukashka(userId);
+    if (!bukashka) {
       await petObject.emptyPetMsg(msg.chat.id);
+      return;
+    }
+    if (waitingForPhoto[userId]) {
+      await petObject.updloadPetImage(userId, { file_id, type });
+      await sendBukashkaInfo(msg.chat.id, userId, 0, 0, bot);
+      waitingForPhoto[userId] = false;
+    } else {
+      await bot.sendMessage(msg.chat.id, `Чтобы установить ${type === 'gif' ? 'gif' : 'фото'}, сначала используйте команду /img.`);
     }
   } catch (error) {
     console.error(error);
   }
+}
+
+bot.on("photo", async (msg) => {
+  await handlePetMedia(msg, 'photo');
+});
+
+bot.on("animation", async (msg) => {
+  await handlePetMedia(msg, 'gif');
 });
 
 // Добавляем обработчик для кнопок

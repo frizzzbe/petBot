@@ -58,6 +58,30 @@ ${feedChange || happinessChange
   `);
 };
 
+// Универсальная функция для отправки фото или gif с подписью
+const sendPetMedia = async (chatId, image, message, bot) => {
+  // Поддержка старого формата (image — строка)
+  if (typeof image === 'string') {
+    await bot.sendPhoto(chatId, image, {
+      caption: message,
+      parse_mode: "MarkdownV2",
+    });
+    return;
+  }
+  // Новый формат (image — объект)
+  if (image.type === 'gif') {
+    await bot.sendAnimation(chatId, image.file_id, {
+      caption: message,
+      parse_mode: "MarkdownV2",
+    });
+  } else {
+    await bot.sendPhoto(chatId, image.file_id, {
+      caption: message,
+      parse_mode: "MarkdownV2",
+    });
+  }
+};
+
 // Функция для отправки информации о букашке
 const sendBukashkaInfo = async (chatId, userId, feedChange = 0, happinessChange = 0, bot) => {
   // Получаем актуальные данные из Firebase
@@ -68,11 +92,7 @@ const sendBukashkaInfo = async (chatId, userId, feedChange = 0, happinessChange 
   const message = formatBukashkaInfo(currentBukashka, feedChange, happinessChange);
 
   if (currentBukashka && currentBukashka.image) {
-    // Если есть фото букашки, отправляем его с информацией
-    await bot.sendPhoto(chatId, currentBukashka.image, {
-      caption: message,
-      parse_mode: "MarkdownV2",
-    });
+    await sendPetMedia(chatId, currentBukashka.image, message, bot);
   } else {
     // Если фото нет, отправляем только информацию
     await bot.sendMessage(chatId, message, {

@@ -4,6 +4,7 @@ const COMMANDS = [
   { command: "help", description: "Раздел помощи" },
   { command: "menu", description: "Меню команд" },
   { command: "take", description: "Взять букашку" },
+  { command: "img", description: "Установить фото вашей букашки" },
 ];
 
 const DEFAULT_BUKASHKA = {
