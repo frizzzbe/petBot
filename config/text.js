@@ -38,7 +38,7 @@ const TEXT = {
     LOCATION: (name, isAdventuring, timeLeft) => isAdventuring
       ? `Ваша букашка ${name} сейчас в приключении! 🎒\n\nОсталось времени: ${timeLeft}\n\nВы можете проверить её состояние, используя команду "Моя букашка".`
       : `Ваша букашка ${name} сейчас дома и готова к новым приключениям! 🏠\n\nИспользуйте команду "Букашку в приключение", чтобы отправить её в путешествие.`,
-    COMPLETE: (text, feed, happiness, money, usedBoostText = null, levelChange = 0, levelNow = 0) => {
+    COMPLETE: (name, text, feed, happiness, money, usedBoostText = null, levelChange = 0, levelNow = 0) => {
       let effects = [];
       if (feed !== 0) effects.push(`${feed > 0 ? '+' : ''}${feed} к сытости 🌱`);
       if (happiness !== 0) effects.push(`${happiness > 0 ? '+' : ''}${happiness} к счастью ${happiness > 0 ? '😊' : '😢'}`);
@@ -46,7 +46,7 @@ const TEXT = {
       if (levelChange > 0) effects.push(`+${levelChange} к уровню`);
       let effectsBlock = effects.length ? effects.join('\n') : '';
       return `
-🎒 *Приключение завершено!* 🎒
+🎒 *Букашка "${name}" завершила приключение!* 🎒
 
 ${text}
 

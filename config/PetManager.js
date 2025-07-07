@@ -130,7 +130,7 @@ class PetManager {
     }
 
     const resultMessage = formatMessage(
-      `${TEXT.ADVENTURE.COMPLETE(adventure.text, adventure.feed, adventureHappiness, coinsEarned, usedBoostText, levelPoints, newLevel)}`
+      `${TEXT.ADVENTURE.COMPLETE(bukashka.name, adventure.text, adventure.feed, adventureHappiness, coinsEarned, usedBoostText, levelPoints, newLevel)}`
     );
 
     await this.bot.sendMessage(chatId, resultMessage, {
