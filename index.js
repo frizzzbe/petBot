@@ -272,7 +272,8 @@ bot.on("text", async (msg) => {
       const userId = msg.from.id;
       const bukashka = await petObject.getBukashka(userId);
       if (bukashka) {
-        await petObject.killBukashka(userId, msg.chat.id, "раздавлена хозяином");
+        // Используем новое сообщение с именем
+        await petObject.killBukashka(userId, msg.chat.id, TEXT.STATUS.CRUSHED(bukashka.name));
       } else {
         await petObject.emptyPetMsg(msg.chat.id);
       }
