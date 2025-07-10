@@ -39,7 +39,7 @@ const TEXT = {
     LOCATION: (name, isAdventuring, timeLeft) => isAdventuring
       ? `Ваша букашка ${name} сейчас в приключении! 🎒\n\nОсталось времени: ${timeLeft}\n\nВы можете проверить её состояние, используя команду "Моя букашка".`
       : `Ваша букашка ${name} сейчас дома и готова к новым приключениям! 🏠\n\nИспользуйте команду "Букашку в приключение", чтобы отправить её в путешествие.`,
-    COMPLETE: (name, text, feed, happiness, money, usedBoostText = null, levelChange = 0, levelNow = 0) => {
+    COMPLETE: ({ userTag, name, text, feed, happiness, money, usedBoostText = null, levelChange = 0, levelNow = 0 }) => {
       let effects = [];
       if (feed !== 0) effects.push(`${feed > 0 ? '+' : ''}${feed} к сытости 🌱`);
       if (happiness !== 0) effects.push(`${happiness > 0 ? '+' : ''}${happiness} к счастью ${happiness > 0 ? '😊' : '😢'}`);
@@ -47,7 +47,7 @@ const TEXT = {
       if (levelChange > 0) effects.push(`+${levelChange} к уровню`);
       let effectsBlock = effects.length ? effects.join('\n') : '';
       return `
-🎒 *Букашка "${name}" завершила приключение!* 🎒
+🎒 *${userTag} ваша букашка - "${name}" завершила приключение!*
 
 ${text}
 
@@ -103,6 +103,7 @@ ${effectsBlock}${usedBoostText ? `\n\n${usedBoostText}` : ''}
 
   // Сообщения для мини-игр
   GAME: {
+    IN_ADVENTURE: "Ваша букашка сейчас в приключении и не может играть! Подождите, пока она вернется. 🎒",
     DICE_RESULT: (value, happy, coins) => {
       let msg = `🎲 ${value === 6 ? 'ОООООО ГАДЕМ!\n' : ''}Выпало: ${value}\n`;
       if (happy > 0) msg += `Счастье: +${happy} 😊\n`;

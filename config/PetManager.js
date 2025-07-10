@@ -68,7 +68,7 @@ class PetManager {
     );
   }
 
-  async completeAdventure(userId, chatId) {
+  async completeAdventure(userId, chatId, username) {
     const snapshot = await this.petsRef.child(userId).once('value');
     const bukashka = snapshot.val();
     if (!bukashka || !bukashka.isAdventuring) return;
@@ -133,12 +133,33 @@ class PetManager {
       usedBoostText = 'Был использован буст: Больше счастья.';
     }
 
+    // Формируем userTag из username или userId
+    let userTag = "";
+    if (username) {
+      userTag = `@${username} `;
+    } else {
+      userTag = `[user](tg://user?id=${userId}) `;
+    } 
+
+    // userTag формируется во внешнем коде и передаётся сюда
     const resultMessage = formatMessage(
-      `${TEXT.ADVENTURE.COMPLETE(bukashka.name, adventure.text, adventure.feed, adventureHappiness, coinsEarned, usedBoostText, levelPoints, newLevel)}`
+      TEXT.ADVENTURE.COMPLETE({
+        userTag,
+        name: bukashka.name,
+        text: adventure.text,
+        feed: adventure.feed,
+        happiness: adventureHappiness,
+        money: coinsEarned,
+        usedBoostText,
+        levelChange: levelPoints,
+        levelNow: newLevel
+      })
     );
+
 
     await this.bot.sendMessage(chatId, resultMessage, {
       parse_mode: "MarkdownV2",
+      disable_web_page_preview: true
     });
 
     if (newFeed === 0) {
@@ -318,7 +339,9 @@ class PetManager {
       if (elapsed >= INTERVALS.ADVENTURE / 1000) {
         const petManager = new PetManager(bot);
         const chatId = bukashka.state && bukashka.state.lastChatId ? bukashka.state.lastChatId : userId;
-        await petManager.completeAdventure(userId, chatId);
+        // username из bukashka.state или null
+        const username = bukashka.state && bukashka.state.username ? bukashka.state.username : null;
+        await petManager.completeAdventure(userId, chatId, username);
       }
     }
   }
@@ -369,17 +392,19 @@ class PetManager {
       const left = (startTime + adventureInterval) - now;
       const petManager = new PetManager(bot);
       const chatId = bukashka.state && bukashka.state.lastChatId ? bukashka.state.lastChatId : userId;
+      // username из bukashka.state или null
+      const username = bukashka.state && bukashka.state.username ? bukashka.state.username : null;
       if (left <= 0) {
-        await petManager.completeAdventure(userId, chatId);
+        await petManager.completeAdventure(userId, chatId, username);
       } else {
         // Восстанавливаем таймер на остаток времени
         if (!petManager.adventureTimers) petManager.adventureTimers = {};
         petManager.adventureTimers[userId] = setTimeout(async () => {
-          // Получаем актуальный lastChatId из базы
           const snap = await petsRef.child(userId).once('value');
           const pet = snap.val();
           const notifyChatId = pet && pet.state && pet.state.lastChatId ? pet.state.lastChatId : userId;
-          await petManager.completeAdventure(userId, notifyChatId);
+          const username = pet && pet.state && pet.state.username ? pet.state.username : null;
+          await petManager.completeAdventure(userId, notifyChatId, username);
         }, left);
       }
     }

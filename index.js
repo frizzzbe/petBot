@@ -34,6 +34,8 @@ const petsRef = db.ref('pets');
 
 // Добавляем объект для отслеживания ожидания фото
 const waitingForPhoto = {};
+// Добавляем объект для отслеживания ожидания имени
+const waitingForName = {};
 
 // Проверка и завершение просроченных приключений при запуске
 PetManager.checkAndFinishAdventures(bot, petsRef);
@@ -112,19 +114,23 @@ bot.on("text", async (msg) => {
         formatMessage(TEXT.START.NEW_BUKASHKA),
         { parse_mode: "MarkdownV2" }
       );
-
-      bot.once("message", async (nameMsg) => {
-        const buakakaName = nameMsg.text;
-        await petObject.createBukashka(userId, msg.chat.id, buakakaName, DEFAULT_BUKASHKA);
-
-        await bot.sendMessage(
-          msg.chat.id,
-          formatMessage(TEXT.START.CONGRATULATIONS(buakakaName)),
-          { parse_mode: "MarkdownV2" }
-        );
-      });
+      // Сохраняем ожидание имени для userId
+      waitingForName[userId] = msg.chat.id;
     } else if (userRequest === "поиграть") {
       const userId = msg.from.id;
+      const bukashka = await petObject.getBukashka(userId);
+      if (!bukashka) {
+        await petObject.emptyPetMsg(msg.chat.id);
+        return;
+      }
+      if (bukashka.isAdventuring) {
+        await bot.sendMessage(
+          msg.chat.id,
+          formatMessage(TEXT.GAME.IN_ADVENTURE),
+          { parse_mode: "MarkdownV2" }
+        );
+        return;
+      }
       const lastGame = await petObject.getLastGameTime(userId);
       if (await checkInterval(lastGame, INTERVALS.GAME, 'game', msg.chat.id, bot)) return;
 
@@ -222,26 +228,12 @@ bot.on("text", async (msg) => {
         return;
       }
 
-      if (bukashka.feed < 10) {
-        const keyboard = {
-          inline_keyboard: [
-            [
-              { text: "Рискнуть", callback_data: "adventure_risk" },
-              { text: "Отказаться", callback_data: "adventure_cancel" }
-            ]
-          ]
-        };
-
-        await bot.sendMessage(
-          msg.chat.id,
-          formatMessage(TEXT.ADVENTURE.LOW_FEED),
-          {
-            parse_mode: "MarkdownV2",
-            reply_markup: keyboard
-          }
-        );
-        return;
-      }
+      // Сохраняем username в state для batch-обработчиков
+      const username = msg.from.username || null;
+      const snapshot = await petObject.petsRef.child(userId).once('value');
+      const bukashkaData = snapshot.val();
+      const state = { ...(bukashkaData?.state || {}), username };
+      await petObject.petsRef.child(userId).update({ state });
 
       await petObject.startAdventure(userId, msg.chat.id, ADVENTURES);
     } else if (userRequest === "где букашка") {
@@ -350,14 +342,37 @@ bot.on("text", async (msg) => {
   }
 });
 
+// Глобальный обработчик для ввода имени букашки
+bot.on("message", async (nameMsg) => {
+  const userId = nameMsg.from.id;
+  if (waitingForName[userId]) {
+    // Проверяем, что это текст
+    if (!nameMsg.text) {
+      await bot.sendMessage(nameMsg.chat.id, "Некорректный ввод");
+      return;
+    }
+    const buakakaName = nameMsg.text;
+    await petObject.createBukashka(userId, waitingForName[userId], buakakaName, DEFAULT_BUKASHKA);
+    await bot.sendMessage(
+      waitingForName[userId],
+      formatMessage(TEXT.START.CONGRATULATIONS(buakakaName)),
+      { parse_mode: "MarkdownV2" }
+    );
+    delete waitingForName[userId];
+  }
+});
+
 // Универсальный обработчик для фото и gif-анимаций
 async function handlePetMedia(msg, type) {
   try {
     const userId = msg.from.id;
     let file_id;
-    if (type === 'photo' && msg.photo) {
+    // Проверяем тип сообщения: если не photo/animation, игнорируем
+    if (type === 'photo') {
+      if (!msg.photo) return; // Ожидали фото, а пришло что-то другое
       file_id = msg.photo[msg.photo.length - 1].file_id;
-    } else if (type === 'gif' && msg.animation) {
+    } else if (type === 'gif') {
+      if (!msg.animation) return; // Ожидали gif, а пришло что-то другое
       file_id = msg.animation.file_id;
     } else {
       return;
@@ -367,11 +382,13 @@ async function handlePetMedia(msg, type) {
       await petObject.emptyPetMsg(msg.chat.id);
       return;
     }
-    if (waitingForPhoto[userId]) {
+    // Проверяем, что фото ждёт именно этот пользователь
+    if (waitingForPhoto[userId] && msg.from.id === userId) {
       await petObject.updloadPetImage(userId, { file_id, type });
       await sendBukashkaInfo(msg.chat.id, userId, 0, 0, bot);
       waitingForPhoto[userId] = false;
     }
+    // Если кто-то другой отправил фото, просто игнорируем
   } catch (error) {
     console.error(error);
   }
