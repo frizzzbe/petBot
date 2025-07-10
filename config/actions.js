@@ -133,7 +133,7 @@ const getFeedResult = (bukashkaName) => {
       happiness: -10,
       message: formatMessage(TEXT.FEED.BAD_FOOD(bukashkaName)),
     };
-  } else if (random < 60) {
+  } else if (random < 30) {
     return {
       type: "водичку",
       amount: 5,

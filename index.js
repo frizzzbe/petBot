@@ -370,8 +370,6 @@ async function handlePetMedia(msg, type) {
       await petObject.updloadPetImage(userId, { file_id, type });
       await sendBukashkaInfo(msg.chat.id, userId, 0, 0, bot);
       waitingForPhoto[userId] = false;
-    } else {
-      await bot.sendMessage(msg.chat.id, `Чтобы установить ${type === 'gif' ? 'gif' : 'фото'}, сначала используйте команду /img.`);
     }
   } catch (error) {
     console.error(error);

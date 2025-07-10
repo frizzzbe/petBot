@@ -31,7 +31,9 @@ class PetManager {
     const bukashka = snapshot.val();
     if (!bukashka) return;
 
-    await this.petsRef.child(userId).update({ state: {...bukashka.state, lastChatId: chatId} });
+    // Обновляем lastChatId в state
+    const state = { ...(bukashka.state || {}), lastChatId: chatId, adventureStartTime: new Date().toISOString() };
+    await this.petsRef.child(userId).update({ state });
 
     const adventure = ADVENTURES[Math.floor(Math.random() * ADVENTURES.length)];
 
@@ -44,8 +46,6 @@ class PetManager {
     }
 
     // Обновляем данные в Firebase с временными метками
-    const state = bukashka.state || {};
-    state.adventureStartTime = new Date().toISOString();
     await this.petsRef.child(userId).update({
       isAdventuring: true,
       adventureResult: adventure,
@@ -54,7 +54,11 @@ class PetManager {
 
     // Устанавливаем таймер для завершения приключения
     this.adventureTimers[userId] = setTimeout(async () => {
-      await this.completeAdventure(userId, chatId);
+      // Получаем актуальный lastChatId из базы
+      const snap = await this.petsRef.child(userId).once('value');
+      const pet = snap.val();
+      const notifyChatId = pet && pet.state && pet.state.lastChatId ? pet.state.lastChatId : userId;
+      await this.completeAdventure(userId, notifyChatId);
     }, adventureInterval);
 
     await this.bot.sendMessage(
@@ -153,7 +157,13 @@ class PetManager {
       // Удаляем данные из Firebase
       await this.petsRef.child(userId).remove();
 
-      await this.bot.sendMessage(chatId, formatMessage(TEXT.STATUS.DEAD(reason, formatTimeLeft(ageSeconds))), {
+      // Определяем, куда отправлять сообщение о смерти
+      let notifyChatId = chatId;
+      if (bukashka.state && bukashka.state.lastChatId) {
+        notifyChatId = bukashka.state.lastChatId;
+      }
+
+      await this.bot.sendMessage(notifyChatId, formatMessage(TEXT.STATUS.DEAD(reason, formatTimeLeft(ageSeconds))), {
         parse_mode: "MarkdownV2"
       });
     }
@@ -289,7 +299,9 @@ class PetManager {
       }
       if (newFeed <= 0) {
         const petManager = new PetManager(bot);
-        await petManager.killBukashka(userId, userId, "голод");
+        // Передаем lastChatId если есть, иначе userId
+        const notifyChatId = bukashka.state && bukashka.state.lastChatId ? bukashka.state.lastChatId : userId;
+        await petManager.killBukashka(userId, notifyChatId, "голод");
       }
     }
   }
@@ -362,8 +374,12 @@ class PetManager {
       } else {
         // Восстанавливаем таймер на остаток времени
         if (!petManager.adventureTimers) petManager.adventureTimers = {};
-        petManager.adventureTimers[userId] = setTimeout(() => {
-          petManager.completeAdventure(userId, chatId);
+        petManager.adventureTimers[userId] = setTimeout(async () => {
+          // Получаем актуальный lastChatId из базы
+          const snap = await petsRef.child(userId).once('value');
+          const pet = snap.val();
+          const notifyChatId = pet && pet.state && pet.state.lastChatId ? pet.state.lastChatId : userId;
+          await petManager.completeAdventure(userId, notifyChatId);
         }, left);
       }
     }

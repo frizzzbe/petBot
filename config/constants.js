@@ -19,7 +19,7 @@ const DEFAULT_BUKASHKA = {
 
 const INTERVALS = {
   FEED: 25 * 60 * 1000, // кормление
-  ADVENTURE: 20 * 60 * 1000, // приключения
+  ADVENTURE: 60 * 60 * 1000, // приключения
   GAME: 5 * 60 * 1000, // игра
   FEED_DECAY: 2 * 60 * 60 * 1000, // голодание
   FEED_BOOST_DURATION: 15 * 60 * 1000 // длительность буста на голодание (15 минут)
@@ -27,7 +27,7 @@ const INTERVALS = {
 
 const VALUE = {
   FEED_DECAY: 3, // голодание
-  HAPPY_DECAY: 3, // счастье
+  HAPPY_DECAY: 5, // счастье
   ADVENTURE_DECAY: 2, // приключения
   GAME_DECAY: 1 // игра
 }
