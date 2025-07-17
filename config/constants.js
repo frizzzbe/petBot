@@ -13,7 +13,7 @@ const DEFAULT_BUKASHKA = {
   happy: 50,
   image: null,
   isAdventuring: false,
-  adventureResult: null,
+  adventureResult: null, 
   coins: 0
 };
 

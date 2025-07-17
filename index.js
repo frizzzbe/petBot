@@ -50,16 +50,19 @@ bot.setMyCommands(COMMANDS);
 
 bot.on("text", async (msg) => {
   try {
+    const userId = msg.from.id;
+    const chatId = msg.chat.id;
+    const userName = msg.from.username;
     const userRequest = normalizeCommand(msg.text);
-
+  
     if (["/start", "/start@bukashki_pet_bot"].includes(msg.text)) {
-      await bot.sendMessage(msg.chat.id, formatMessage(TEXT.START.WELCOME), {
+      await bot.sendMessage(chatId, formatMessage(TEXT.START.WELCOME), {
         parse_mode: "MarkdownV2"
       });
     } else if (["/menu", "/menu@bukashki_pet_bot"].includes(msg.text)) {
       // Удаляем команду пользователя
-      await bot.deleteMessage(msg.chat.id, msg.message_id);
-      const sent = await bot.sendMessage(msg.chat.id, "Вы открыли /menu", {
+      await bot.deleteMessage(chatId, msg.message_id);
+      const sent = await bot.sendMessage(chatId, "Вы открыли /menu", {
         reply_markup: {
           keyboard: [
             ["⭐️ Покормить", "⭐️ Моя букашка"],
@@ -71,71 +74,73 @@ bot.on("text", async (msg) => {
         }
       });
       return;
+    } else if (msg.text === "z") {
+      await bot.sendMessage(chatId, formatMessage(`Вас zовут @${userName}`), {
+        parse_mode: "MarkdownV2"
+      });
+      return;
     } else if (msg.text === "Закрыть меню") {
       // Удаляем команду пользователя
-      await bot.deleteMessage(msg.chat.id, msg.message_id);
-      const sent = await bot.sendMessage(msg.chat.id, "Вы закрыли меню", {
+      await bot.deleteMessage(chatId, msg.message_id);
+      const sent = await bot.sendMessage(chatId, "Вы закрыли меню", {
         reply_markup: {
           remove_keyboard: true
         }
       });
-        bot.deleteMessage(msg.chat.id, sent.message_id).catch(() => {});
+        bot.deleteMessage(chatId, sent.message_id).catch(() => {});
 
       return;
     } else if (["/help", "/help@bukashki_pet_bot"].includes(msg.text)) {
-      await bot.sendMessage(msg.chat.id, formatMessage(TEXT.HELP), {
+      await bot.sendMessage(chatId, formatMessage(TEXT.HELP), {
         parse_mode: "MarkdownV2"
       });
     } else if (["/img", "/img@bukashki_pet_bot"].includes(msg.text)) {
-      const userId = msg.from.id;
       const bukashka = await petObject.getBukashka(userId);
       if (!bukashka) {
-        await petObject.emptyPetMsg(msg.chat.id);
+        await petObject.emptyPetMsg(chatId);
         return;
       }
       waitingForPhoto[userId] = true;
-      await bot.sendMessage(msg.chat.id, "Отправьте фотографию для профиля вашей букашки.");
+      await bot.sendMessage(chatId, "Отправьте фотографию для профиля вашей букашки.");
     } else if (userRequest === "взять букашку" || ["/take@bukashki_pet_bot", "/take"].includes(msg.text)) {
-      const userId = msg.from.id;
       const pet = await petObject.getBukashka(userId);
       if (pet) {
         await bot.sendMessage(
-          msg.chat.id,
+          chatId,
           formatMessage(TEXT.STATUS.ALREADY_EXISTS),
           { parse_mode: "MarkdownV2" }
         );
         // Инициализация таймера голодания для уже существующей букашки
-        petObject.startFeedTimer(userId, msg.chat.id);
+        petObject.startFeedTimer(userId, chatId);
         return;
       }
 
       await bot.sendMessage(
-        msg.chat.id,
+        chatId,
         formatMessage(TEXT.START.NEW_BUKASHKA),
         { parse_mode: "MarkdownV2" }
       );
       // Сохраняем ожидание имени для userId
-      waitingForName[userId] = msg.chat.id;
+      waitingForName[userId] = { chatId: chatId, userName };
     } else if (userRequest === "поиграть") {
-      const userId = msg.from.id;
       const bukashka = await petObject.getBukashka(userId);
       if (!bukashka) {
-        await petObject.emptyPetMsg(msg.chat.id);
+        await petObject.emptyPetMsg(chatId);
         return;
       }
       if (bukashka.isAdventuring) {
         await bot.sendMessage(
-          msg.chat.id,
+          chatId,
           formatMessage(TEXT.GAME.IN_ADVENTURE),
           { parse_mode: "MarkdownV2" }
         );
         return;
       }
       const lastGame = await petObject.getLastGameTime(userId);
-      if (await checkInterval(lastGame, INTERVALS.GAME, 'game', msg.chat.id, bot)) return;
+      if (await checkInterval(lastGame, INTERVALS.GAME, 'game', chatId, bot)) return;
 
       await bot.sendMessage(
-        msg.chat.id,
+        chatId,
         formatMessage("Выберите игру"),
         {
           parse_mode: "MarkdownV2", reply_markup: {
@@ -149,16 +154,15 @@ bot.on("text", async (msg) => {
         }
       );
     } else if (userRequest === "покормить") {
-      const userId = msg.from.id;
       const bukashka = await petObject.getBukashka(userId);
       if (!bukashka) {
-        await petObject.emptyPetMsg(msg.chat.id);
+        await petObject.emptyPetMsg(chatId);
         return;
       }
 
       if (bukashka.isAdventuring) {
         await bot.sendMessage(
-          msg.chat.id,
+          chatId,
           formatMessage(TEXT.FEED.IN_ADVENTURE),
           { parse_mode: "MarkdownV2" }
         );
@@ -166,7 +170,7 @@ bot.on("text", async (msg) => {
       }
 
       const lastFeed = await petObject.getLastFeedTime(userId);
-      if (await checkInterval(lastFeed, INTERVALS.FEED, 'feed', msg.chat.id, bot)) return;
+      if (await checkInterval(lastFeed, INTERVALS.FEED, 'feed', chatId, bot)) return;
 
       try {
         const feedResult = getFeedResult(bukashka.name);
@@ -185,43 +189,41 @@ bot.on("text", async (msg) => {
         });
 
         try {
-          await bot.sendMessage(msg.chat.id, formatMessage(feedResult.message), {
+          await bot.sendMessage(chatId, formatMessage(feedResult.message), {
             parse_mode: "MarkdownV2",
           });
         } catch (error) {
           // Отправляем сообщение без форматирования в случае ошибки
-          await bot.sendMessage(msg.chat.id, feedResult.message.replace(/\\/g, ''));
+          await bot.sendMessage(chatId, feedResult.message.replace(/\\/g, ''));
         }
 
         // Проверяем, не умерла ли букашка от неприятной еды
         if (newFeed === 0 && feedResult.type === "говняшка") {
-          await petObject.killBukashka(userId, msg.chat.id, "Поела говна и померла 😢");
+          await petObject.killBukashka(userId, chatId, "Поела говна и померла 😢");
           return;
         }
       } catch (error) {
         console.error('Error while feeding:', error);
-        await bot.sendMessage(msg.chat.id, TEXT.FEED.ERROR);
+        await bot.sendMessage(chatId, TEXT.FEED.ERROR);
       }
     } else if (userRequest === "моя букашка") {
-      const userId = msg.from.id;
       const bukashka = await petObject.getBukashka(userId);
       if (bukashka) {
-        await sendBukashkaInfo(msg.chat.id, userId, 0, 0, bot);
+        await sendBukashkaInfo(chatId, userId, 0, 0, bot);
       } else {
-        await petObject.emptyPetMsg(msg.chat.id);
+        await petObject.emptyPetMsg(chatId);
       }
     } else if (userRequest === "букашку в приключение") {
-      const userId = msg.from.id;
       const bukashka = await petObject.getBukashka(userId);
       if (!bukashka) {
-        await petObject.emptyPetMsg(msg.chat.id);
+        await petObject.emptyPetMsg(chatId);
         return;
       }
 
       if (bukashka.isAdventuring) {
         const timeLeft = await petObject.getAdventureTimeLeft(userId);
         await bot.sendMessage(
-          msg.chat.id,
+          chatId,
           formatMessage(TEXT.ADVENTURE.IN_PROGRESS(bukashka.name, formatTimeLeft(timeLeft))),
           { parse_mode: "MarkdownV2" }
         );
@@ -229,18 +231,16 @@ bot.on("text", async (msg) => {
       }
 
       // Сохраняем username в state для batch-обработчиков
-      const username = msg.from.username || null;
       const snapshot = await petObject.petsRef.child(userId).once('value');
       const bukashkaData = snapshot.val();
-      const state = { ...(bukashkaData?.state || {}), username };
+      const state = { ...(bukashkaData?.state || {}), userName };
       await petObject.petsRef.child(userId).update({ state });
 
-      await petObject.startAdventure(userId, msg.chat.id, ADVENTURES);
+      await petObject.startAdventure(userId, chatId, ADVENTURES);
     } else if (userRequest === "где букашка") {
-      const userId = msg.from.id;
       const bukashka = await petObject.getBukashka(userId);
       if (!bukashka) {
-        await petObject.emptyPetMsg(msg.chat.id);
+        await petObject.emptyPetMsg(chatId);
         return;
       }
 
@@ -256,25 +256,23 @@ bot.on("text", async (msg) => {
       }
 
       await bot.sendMessage(
-        msg.chat.id,
+        chatId,
         formatMessage(TEXT.ADVENTURE.LOCATION(bukashka.name, bukashka.isAdventuring, formatTimeLeft(timeLeft))),
         { parse_mode: "MarkdownV2" }
       );
     } else if (userRequest === "раздавить букашку") {
-      const userId = msg.from.id;
       const bukashka = await petObject.getBukashka(userId);
       if (bukashka) {
         // Используем новое сообщение с именем
-        await petObject.killBukashka(userId, msg.chat.id, TEXT.STATUS.CRUSHED(bukashka.name));
+        await petObject.killBukashka(userId, chatId, TEXT.STATUS.CRUSHED(bukashka.name));
       } else {
-        await petObject.emptyPetMsg(msg.chat.id);
+        await petObject.emptyPetMsg(chatId);
       }
     } else if (userRequest === "магазин") {
       // Проверяем активный буст и статус приключения
-      const userId = msg.from.id;
       const bukashka = await petObject.getBukashka(userId);
       if (bukashka && bukashka.isAdventuring) {
-        await bot.sendMessage(msg.chat.id, 'Нельзя посещать магазин, пока букашка находится в приключении!');
+        await bot.sendMessage(chatId, formatMessage(TEXT.SHOP.IN_ADVENTURE), { parse_mode: "MarkdownV2" });
         return;
       }
       let boostInfo = '';
@@ -291,7 +289,7 @@ bot.on("text", async (msg) => {
         coinsInfo = `\nВаш баланс: ${bukashka.coins || 0} монет 🪙`;
       }
       await bot.sendMessage(
-        msg.chat.id,
+        chatId,
         formatMessage(TEXT.SHOP.WELCOME()) + `\n${coinsInfo}\n\n${boostInfo}`,
         {
           reply_markup: {
@@ -317,7 +315,7 @@ bot.on("text", async (msg) => {
       const snapshot = await petsRef.once('value');
       const pets = snapshot.val();
       if (!pets) {
-        await bot.sendMessage(msg.chat.id, 'Нет ни одной букашки в рейтинге.');
+        await bot.sendMessage(chatId, 'Нет ни одной букашки в рейтинге.');
         return;
       }
       // Преобразуем в массив и сортируем по уровню (level)
@@ -326,7 +324,7 @@ bot.on("text", async (msg) => {
         .sort((a, b) => (b.level || 0) - (a.level || 0))
         .slice(0, 20);
       if (petList.length === 0) {
-        await bot.sendMessage(msg.chat.id, 'Нет ни одной букашки в рейтинге.');
+        await bot.sendMessage(chatId, 'Нет ни одной букашки в рейтинге.');
         return;
       }
       // Формируем текст рейтинга
@@ -335,7 +333,7 @@ bot.on("text", async (msg) => {
         const rest = b.level % 100;
         return `${i + 1}. ${b.name} - Уровень ${lvl} (${rest}/100)`;
       }).join('\n');
-      await bot.sendMessage(msg.chat.id, `🔝 Топ букашек во всём мире:\n${ratingText}`);
+      await bot.sendMessage(chatId, `🔝 Топ букашек во всём мире:\n${ratingText}`);
     }
   } catch (error) {
     console.error(error);
@@ -348,13 +346,14 @@ bot.on("message", async (nameMsg) => {
   if (waitingForName[userId]) {
     // Проверяем, что это текст
     if (!nameMsg.text) {
-      await bot.sendMessage(nameMsg.chat.id, "Некорректный ввод");
+      await bot.sendMessage(namechatId, "Некорректный ввод");
       return;
     }
     const buakakaName = nameMsg.text;
-    await petObject.createBukashka(userId, waitingForName[userId], buakakaName, DEFAULT_BUKASHKA);
+    const { chatId, userName } = waitingForName[userId];
+    await petObject.createBukashka(userId, chatId, buakakaName, DEFAULT_BUKASHKA, userName);
     await bot.sendMessage(
-      waitingForName[userId],
+      chatId,
       formatMessage(TEXT.START.CONGRATULATIONS(buakakaName)),
       { parse_mode: "MarkdownV2" }
     );
@@ -379,13 +378,13 @@ async function handlePetMedia(msg, type) {
     }
     const bukashka = await petObject.getBukashka(userId);
     if (!bukashka) {
-      await petObject.emptyPetMsg(msg.chat.id);
+      await petObject.emptyPetMsg(chatId);
       return;
     }
     // Проверяем, что фото ждёт именно этот пользователь
     if (waitingForPhoto[userId] && msg.from.id === userId) {
       await petObject.updloadPetImage(userId, { file_id, type });
-      await sendBukashkaInfo(msg.chat.id, userId, 0, 0, bot);
+      await sendBukashkaInfo(chatId, userId, 0, 0, bot);
       waitingForPhoto[userId] = false;
     }
     // Если кто-то другой отправил фото, просто игнорируем
@@ -444,6 +443,10 @@ bot.on('callback_query', async (query) => {
     await petObject.updateLastGameTime(userId, new Date().toISOString());
     return;
   } else if (query.data === "boost_adventure" || query.data === "boost_happy" || query.data === "boost_feed") {
+    if (bukashka && bukashka.isAdventuring) {
+      await bot.sendMessage(chatId, formatMessage(TEXT.SHOP.IN_ADVENTURE), { parse_mode: "MarkdownV2" });
+      return;
+    }
     bot.answerCallbackQuery(query.id);
     let boostType = null;
     let price = 0;
@@ -452,10 +455,6 @@ bot.on('callback_query', async (query) => {
     if (query.data === "boost_happy") { boostType = "happy_boost"; price = SHOP_PRICES.happy_boost; boostText = 'Больше счастья'; }
     if (query.data === "boost_feed") { boostType = "feed_boost"; price = SHOP_PRICES.feed_boost; boostText = 'Меньше голода'; }
     // Проверка: нельзя купить тот же буст повторно
-    if (bukashka && bukashka.isAdventuring) {
-      await bot.sendMessage(chatId, 'Нельзя покупать бусты, пока букашка находится в приключении!');
-      return;
-    }
     if (bukashka && bukashka.boost === boostType) {
       await bot.sendMessage(chatId, formatMessage(TEXT.SHOP.ALREADY_THIS_BOOST(boostText)), { parse_mode: "MarkdownV2" });
       return;
@@ -482,6 +481,10 @@ bot.on('callback_query', async (query) => {
   } else if (query.data === "shop_rabbit") {
     bot.answerCallbackQuery(query.id);
     const bukashka = await petObject.getBukashka(userId);
+    if (bukashka && bukashka.isAdventuring) {
+      await bot.sendMessage(chatId, formatMessage(TEXT.SHOP.IN_ADVENTURE), { parse_mode: "MarkdownV2" });
+      return;
+    }
     if (!bukashka) {
       await petObject.emptyPetMsg(chatId);
       return;
@@ -501,6 +504,10 @@ bot.on('callback_query', async (query) => {
     return;
   } else if (query.data === "casino") {
     bot.answerCallbackQuery(query.id);
+    if (bukashka && bukashka.isAdventuring) {
+      await bot.sendMessage(chatId, formatMessage(TEXT.SHOP.IN_ADVENTURE), { parse_mode: "MarkdownV2" });
+      return;
+    }
     if ((bukashka.coins || 0) < SHOP_PRICES.PRICE) {
       await bot.sendMessage(chatId, TEXT.CASINO.NOT_ENOUGH(SHOP_PRICES.PRICE));
       return;

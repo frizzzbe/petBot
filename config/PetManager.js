@@ -41,7 +41,7 @@ class PetManager {
     let adventureInterval = INTERVALS.ADVENTURE;
     let usedAdventureBoost = false;
     if (bukashka.boost === 'adventure_boost') {
-      adventureInterval = Math.floor(INTERVALS.ADVENTURE / 1.5);
+      adventureInterval = Math.floor(INTERVALS.ADVENTURE * 0.6);
       usedAdventureBoost = true;
     }
 
@@ -54,7 +54,7 @@ class PetManager {
 
     // Устанавливаем таймер для завершения приключения
     this.adventureTimers[userId] = setTimeout(async () => {
-      // Получаем актуальный lastChatId из базы
+      // Получаем актуальный lastChatId и username из базы
       const snap = await this.petsRef.child(userId).once('value');
       const pet = snap.val();
       const notifyChatId = pet && pet.state && pet.state.lastChatId ? pet.state.lastChatId : userId;
@@ -68,7 +68,7 @@ class PetManager {
     );
   }
 
-  async completeAdventure(userId, chatId, username) {
+  async completeAdventure(userId, chatId) {
     const snapshot = await this.petsRef.child(userId).once('value');
     const bukashka = snapshot.val();
     if (!bukashka || !bukashka.isAdventuring) return;
@@ -133,18 +133,9 @@ class PetManager {
       usedBoostText = 'Был использован буст: Больше счастья.';
     }
 
-    // Формируем userTag из username или userId
-    let userTag = "";
-    if (username) {
-      userTag = `@${username} `;
-    } else {
-      userTag = `[user](tg://user?id=${userId}) `;
-    } 
-
-    // userTag формируется во внешнем коде и передаётся сюда
     const resultMessage = formatMessage(
       TEXT.ADVENTURE.COMPLETE({
-        userTag,
+        userTag: bukashka.state?.userName ? `@${bukashka.state.userName}` : '',
         name: bukashka.name,
         text: adventure.text,
         feed: adventure.feed,
@@ -190,7 +181,7 @@ class PetManager {
     }
   }
 
-  async createBukashka(userId, chatId, name, DEFAULT_BUKASHKA) {
+  async createBukashka(userId, chatId, name, DEFAULT_BUKASHKA, userName) {
     const bukashkaData = {
       name,
       creationDate: new Date().toISOString(),
@@ -202,7 +193,8 @@ class PetManager {
         lastFeedWarning: 100,
         lastGameTime: null,
         adventureStartTime: null,
-        feedBoostUntil: null
+        feedBoostUntil: null,
+        userName: userName || null
       },
       ...DEFAULT_BUKASHKA
     };
@@ -307,7 +299,9 @@ class PetManager {
         oldFeed > threshold && newFeed <= threshold && threshold < lastFeedWarning
       );
       if (crossed !== undefined) {
-        await bot.sendMessage(userId, formatMessage(TEXT.FEED.HUNGRY(bukashka.name, newFeed)), {
+        const notifyChatId = state && state.lastChatId ? state.lastChatId : userId;
+        const hungryMsg = `@${state.username}\n${TEXT.FEED.HUNGRY(bukashka.name, newFeed)}`;
+        await bot.sendMessage(notifyChatId, formatMessage(hungryMsg), {
           parse_mode: "MarkdownV2",
         });
         state.lastFeedWarning = crossed;
@@ -341,7 +335,7 @@ class PetManager {
         const chatId = bukashka.state && bukashka.state.lastChatId ? bukashka.state.lastChatId : userId;
         // username из bukashka.state или null
         const username = bukashka.state && bukashka.state.username ? bukashka.state.username : null;
-        await petManager.completeAdventure(userId, chatId, username);
+        await petManager.completeAdventure(userId, chatId);
       }
     }
   }
@@ -395,7 +389,7 @@ class PetManager {
       // username из bukashka.state или null
       const username = bukashka.state && bukashka.state.username ? bukashka.state.username : null;
       if (left <= 0) {
-        await petManager.completeAdventure(userId, chatId, username);
+        await petManager.completeAdventure(userId, chatId); 
       } else {
         // Восстанавливаем таймер на остаток времени
         if (!petManager.adventureTimers) petManager.adventureTimers = {};
@@ -404,7 +398,7 @@ class PetManager {
           const pet = snap.val();
           const notifyChatId = pet && pet.state && pet.state.lastChatId ? pet.state.lastChatId : userId;
           const username = pet && pet.state && pet.state.username ? pet.state.username : null;
-          await petManager.completeAdventure(userId, notifyChatId, username);
+          await petManager.completeAdventure(userId, notifyChatId);
         }, left);
       }
     }
